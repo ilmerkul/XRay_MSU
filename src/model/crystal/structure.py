@@ -3,9 +3,6 @@ import numpy as np
 from ..atom.scattering import f0
 
 
-# ----------------------------------------------------------------------
-# 4. Structure factor calculation
-# ----------------------------------------------------------------------
 def structure_factor(crystal, hkl, wavelength):
     d = crystal.d_spacing(hkl)
     if d == np.inf:

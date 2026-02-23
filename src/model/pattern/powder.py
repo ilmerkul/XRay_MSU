@@ -5,9 +5,6 @@ from ..group.space import multiplicity
 from .utils import caglioti_fwhm, gaussian, lorentzian, lp_factor, pseudo_voigt
 
 
-# ----------------------------------------------------------------------
-# 6. Powder pattern simulation
-# ----------------------------------------------------------------------
 class PowderPattern:
     def __init__(
         self,
@@ -51,10 +48,10 @@ class PowderPattern:
                             continue
                         twoth = 2 * np.degrees(th)
                         F = structure_factor(self.crystal, (h, k, l), self.wavelength)
-                        mult = multiplicity((h, k, l), self.crystal)
+                        mult = multiplicity(self.crystal, (h, k, l))
                         lp = lp_factor(twoth)
                         intensity = self.scale * mult * lp * np.abs(F) ** 2
-                        if intensity > 1e-6:  # skip negligible peaks
+                        if intensity > 1e-6:
                             refs.append(
                                 {
                                     "hkl": (h, k, l),

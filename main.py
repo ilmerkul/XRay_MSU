@@ -8,25 +8,16 @@ import numpy as np
 import scipy.optimize
 
 from src.model.atom.atom import Atom
-from src.model.crystal.crystal import Crystal
-from src.model.group.space import TrivialSpaceGroup
+from src.model.crystal.crystal import Crystal, lattice_to_matrix
 from src.model.pattern.powder import PowderPattern
 
-# ----------------------------------------------------------------------
-# 7. Example: Silicon (cubic, manually placed atoms)
-# ----------------------------------------------------------------------
 a_Si = 5.4307
+# Asymmetric unit for Si in Fd-3m (origin choice 2): two independent atoms
 atoms_Si = [
-    Atom("Si", 0.0, 0.0, 0.0),
-    Atom("Si", 0.0, 0.5, 0.5),
-    Atom("Si", 0.5, 0.0, 0.5),
-    Atom("Si", 0.5, 0.5, 0.0),
-    Atom("Si", 0.25, 0.25, 0.25),
-    Atom("Si", 0.25, 0.75, 0.75),
-    Atom("Si", 0.75, 0.25, 0.75),
-    Atom("Si", 0.75, 0.75, 0.25),
+    Atom("Si", 0.0, 0.0, 0.0),  # 8a site
+    Atom("Si", 0.25, 0.25, 0.25),  # 8b site
 ]
-crystal_Si = Crystal(a_Si, a_Si, a_Si, 90, 90, 90, TrivialSpaceGroup(), atoms_Si)
+crystal_Si = Crystal(a_Si, a_Si, a_Si, 90, 90, 90, 227, atoms_Si)
 
 lambda_Cu = 1.54056
 
@@ -44,36 +35,34 @@ pattern_Si = PowderPattern(
 
 # Plot
 plt.figure(figsize=(10, 4))
-plt.plot(pattern_Si.twotheta, pattern_Si.ycalc, label="Simulated Si")
+plt.plot(pattern_Si.twotheta, pattern_Si.ycalc, label="Simulated Si (spglib)")
 plt.xlabel("2θ (deg)")
 plt.ylabel("Intensity")
-plt.title("Simulated powder pattern of Silicon")
+plt.title("Simulated powder pattern of Silicon (Fd-3m)")
 plt.legend()
 plt.grid(True)
-plt.savefig("silicon_pattern.png", dpi=300)
-plt.close()
+plt.savefig("1.png")
 
 
 # ----------------------------------------------------------------------
-# 8. Refinement framework (simple Rietveld)
+# 7. Refinement framework (simple Rietveld)
 # ----------------------------------------------------------------------
 def residual(
     params, twotheta_exp, y_exp, crystal_template, wavelength, profile="pvoigt"
 ):
-    """
-    Residual function for least-squares refinement.
-    params: [scale, U, V, W, eta, a]
-    """
     scale, U, V, W, eta, a = params
-    # Create a copy of the crystal with the new lattice parameter
     crystal_copy = crystal_template.copy()
     crystal_copy.a = a
     crystal_copy.b = a
     crystal_copy.c = a
     crystal_copy._compute_metrics()
-    # Regenerate full atoms (lattice not changed, so same positions)
+    crystal_copy._lattice_matrix = lattice_to_matrix(a, a, a, 90, 90, 90)
+    # Need to regenerate symmetry operations because lattice changed
+    crystal_copy.rotations, crystal_copy.translations = (
+        crystal_copy._get_symmetry_operations()
+    )
     crystal_copy.full_atoms = crystal_copy._generate_full_atoms()
-    # Compute pattern
+
     pattern = PowderPattern(
         crystal_copy,
         wavelength,
@@ -134,8 +123,7 @@ plt.plot(
 )
 plt.xlabel("2θ (deg)")
 plt.ylabel("Intensity")
-plt.title("Rietveld refinement test")
+plt.title("Rietveld refinement test with spglib")
 plt.legend()
 plt.grid(True)
-plt.savefig("silicon_patternl.png", dpi=300)
-plt.close()
+plt.savefig("2.png")

@@ -1,25 +1,19 @@
 [project]
 name = "xray-msu"
 version = "0.1.0"
-description = ""
-authors = [
-    {name = "ivmerkulov",email = "ivmerkulov@navio.auto"}
-]
+description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
-    "numpy (>=2.4.2,<3.0.0)",
-    "scipy (>=1.17.0,<2.0.0)",
-    "matplotlib (>=3.10.8,<4.0.0)"
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.2",
+    "scipy>=1.17.1",
+    "spglib>=2.7.0",
+    "xraylib>=4.2.1",
 ]
-
-
-[build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
 
 [dependency-groups]
 dev = [
-    "isort (>=7.0.0,<8.0.0)",
-    "black (>=26.1.0,<27.0.0)"
+    "black>=26.1.0",
+    "isort>=8.0.0",
 ]

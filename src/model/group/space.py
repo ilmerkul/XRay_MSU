@@ -60,49 +60,17 @@ class SpaceGroup:
         return positions
 
 
-# Example space groups (not used in the Si example, but kept for illustration)
-FD3M = SpaceGroup(
-    [
-        (np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]], dtype=int), np.array([0, 0, 0])),
-        (np.array([[-1, 0, 0], [0, 1, 0], [0, 0, -1]], dtype=int), np.array([0, 0, 0])),
-        (
-            np.array([[-1, 0, 0], [0, -1, 0], [0, 0, -1]], dtype=int),
-            np.array([0, 0, 0]),
-        ),
-    ]
-)
-
-
-# Trivial space group (no symmetry, returns only the input coordinate)
-class TrivialSpaceGroup:
-    def apply(self, x):
-        return [x]
-
-
-def multiplicity(hkl, crystal):
+def multiplicity(crystal, hkl):
     """
-    Approximate multiplicity for cubic crystals.
-    For non-cubic, a proper Laue-group generator would be needed.
+    Compute reflection multiplicity using the point-group operations
+    (rotational parts of the space group). Ignores translations.
     """
-    h, k, l = hkl
-    # Count permutations of |h|,|k|,|l| with signs (simple cubic Laue group m-3m)
-    hkl_abs = np.sort([abs(h), abs(k), abs(l)])
-    # For (000) we don't call this function
-    if hkl_abs[2] == 0:
-        # one index zero, two non-zero: e.g., (h,k,0)
-        return (
-            4 * 2
-        )  # 4 permutations of two non-zero, 2 sign choices? Actually many cases.
-        # For simplicity, return a placeholder.
-    # We'll use a simple lookup for common cases:
-    # For (111)-type: all equal non-zero -> 8
-    if hkl_abs[0] == hkl_abs[1] == hkl_abs[2] and hkl_abs[2] > 0:
-        return 8
-    # For (h h 0) type: two equal, third zero -> 12
-    if hkl_abs[0] == hkl_abs[1] and hkl_abs[2] == 0:
-        return 12
-    # For (h 0 0) type: one non-zero, others zero -> 6
-    if hkl_abs[1] == 0:
-        return 6
-    # General (h k l) all different and non-zero -> 48
-    return 48
+    hkl = np.array(hkl, dtype=float)
+    orbits = set()
+    for R in crystal.rotations:
+        # Real-space rotation R acts on reciprocal vector as R^T (since R is orthogonal)
+        hkl_rot = R.T @ hkl
+        # Round to integer (within tolerance)
+        hkl_rounded = tuple(int(round(x)) for x in hkl_rot)
+        orbits.add(hkl_rounded)
+    return len(orbits)
