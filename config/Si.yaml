@@ -1,0 +1,13 @@
+name: "Si"
+a: 5.431
+b: 5.431
+c: 5.431
+alpha: 90
+beta: 90
+gamma: 90
+space_group: 227
+atoms: [
+  ["Si", 0, 0, 0, 1.0, 0.45],
+  ["Si", 0.25, 0.25, 0.25, 1.0, 0.45]
+]
+wavelength: 1.5418

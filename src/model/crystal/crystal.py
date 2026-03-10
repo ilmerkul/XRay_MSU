@@ -5,7 +5,6 @@ from ..atom.atom import Atom
 
 
 def lattice_to_matrix(a, b, c, alpha, beta, gamma):
-    """Convert lattice parameters to a 3x3 matrix (rows = basis vectors)."""
     alpha = np.radians(alpha)
     beta = np.radians(beta)
     gamma = np.radians(gamma)
@@ -13,11 +12,9 @@ def lattice_to_matrix(a, b, c, alpha, beta, gamma):
     cb = np.cos(beta)
     cg = np.cos(gamma)
     sg = np.sin(gamma)
-    # a vector along x
+
     a_vec = [a, 0.0, 0.0]
-    # b vector in xy-plane
     b_vec = [b * cg, b * sg, 0.0]
-    # c vector with components
     cx = c * cb
     cy = c * (ca - cb * cg) / sg
     cz = c * np.sqrt(1.0 - cb**2 - ((ca - cb * cg) / sg) ** 2)
@@ -29,11 +26,6 @@ class Crystal:
     def __init__(
         self, a, b, c, alpha, beta, gamma, spacegroup_number, atoms, symprec=1e-5
     ):
-        """
-        spacegroup_number: International Tables number (1-230).
-        atoms: list of Atom objects (asymmetric unit).
-        symprec: tolerance for symmetry detection.
-        """
         self.a = a
         self.b = b
         self.c = c
@@ -47,10 +39,8 @@ class Crystal:
         self._compute_metrics()
         self._lattice_matrix = lattice_to_matrix(a, b, c, alpha, beta, gamma)
 
-        # Get symmetry operations for this space group using a dummy atom
         self.rotations, self.translations = self._get_symmetry_operations()
 
-        # Expand atoms to full unit cell
         self.full_atoms = self._generate_full_atoms()
 
     def _compute_metrics(self):
@@ -73,39 +63,30 @@ class Crystal:
         self.Gstar = np.linalg.inv(self.G)
 
     def _get_symmetry_operations(self):
-        """
-        Use spglib to obtain all symmetry operations of the space group.
-        A dummy cell with one atom at a general position ensures that
-        no extra symmetry is accidentally added.
-        """
-        # Dummy atom at a general position (not on any special position)
-        dummy_positions = [[0.1, 0.2, 0.3]]
-        dummy_types = [1]  # any atomic number
-        dummy_cell = (self._lattice_matrix, dummy_positions, dummy_types)
-        # Get symmetry (space group will be the one we want, because the atom is general)
-        sym = spglib.get_symmetry(dummy_cell, symprec=self.symprec)
-        if sym is None:
-            raise RuntimeError("spglib failed to get symmetry operations.")
-        rotations = sym["rotations"]  # shape (n_ops, 3, 3)
-        translations = sym["translations"]  # shape (n_ops, 3)
-        return rotations, translations
+        try:
+            spg_type = spglib.get_spacegroup_type(self.spacegroup_number)
+            hall_number = spg_type.hall_number
+            sym = spglib.get_symmetry_from_database(hall_number)
+            rotations = sym['rotations']
+            translations = sym['translations']
+            return rotations, translations
+        except (AttributeError, KeyError, RuntimeError) as e:
+            raise RuntimeError(
+                f"Could not get symmetry operations for space group {self.spacegroup_number}. "
+                "Ensure spglib is up‑to‑date and the space group number is valid."
+            ) from e
 
     def _generate_full_atoms(self):
-        """Apply all symmetry operations to the asymmetric unit atoms."""
         full = []
-        # We'll use a set to avoid duplicates, but atoms are not hashable.
-        # Instead, we keep a list and compare with a tolerance.
-        eps = 1e-4
         for atom in self.atoms:
             for R, t in zip(self.rotations, self.translations):
                 new_frac = R @ atom.frac + t
                 new_frac = new_frac % 1.0
-                # Check if this atom already exists (same element and near position)
                 duplicate = False
                 for existing in full:
                     if existing.element != atom.element:
                         continue
-                    if np.allclose(existing.frac, new_frac, atol=eps):
+                    if np.allclose(existing.frac, new_frac, atol=self.symprec):
                         duplicate = True
                         break
                 if not duplicate:
@@ -128,7 +109,6 @@ class Crystal:
         return 1.0 / np.sqrt(invd2)
 
     def copy(self):
-        """Create a shallow copy for refinement (atoms are not deep-copied, but that's OK)."""
         new_crystal = Crystal(
             self.a,
             self.b,

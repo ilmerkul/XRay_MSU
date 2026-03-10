@@ -1,19 +1,48 @@
+from math import sin
+
 import numpy as np
 
-from ..atom.scattering import f0
 
+import xraylib
 
-def structure_factor(crystal, hkl, wavelength):
-    d = crystal.d_spacing(hkl)
-    if d == np.inf:
-        return 0.0
-    s_val = 0.5 / d  # sinθ/λ
+def structure_factor(crystal, hkl, th, wavelength):
+    """
+    Вычисляет структурный фактор F(hkl) с учётом аномальной дисперсии.
+    
+    Параметры
+    ----------
+    crystal : Crystal
+        Объект кристалла с полным списком атомов (full_atoms).
+    hkl : tuple
+        Индексы Миллера (h, k, l).
+    th : float
+        Угол Брэгга в радианах.
+    wavelength : float
+        Длина волны рентгеновского излучения (в тех же единицах, что и длина волны).
+
+    Возвращает
+    -------
+    complex
+        Структурный фактор F = Σ occ * (f0 + f' + i f'') * T * exp(2πi (h·x))
+    """
+    s_val = np.sin(th) / wavelength
     F = 0.0 + 0.0j
+    
     for atom in crystal.full_atoms:
-        phase = 2j * np.pi * np.dot(hkl, atom.frac)
-        f = f0(atom.element, s_val)
+        f0 = xraylib.FF_Rayl(xraylib.SymbolToAtomicNumber(atom.element), s_val)
+
+        energy_keV = 12.398 / wavelength
+        f_prime = xraylib.Fi(xraylib.SymbolToAtomicNumber(atom.element), energy_keV)
+        f_double_prime = xraylib.Fii(xraylib.SymbolToAtomicNumber(atom.element), energy_keV)
+
+        f_total = f0 + f_prime + 1j * f_double_prime
+        
         T = np.exp(-atom.Biso * s_val**2)
-        F += atom.occ * f * T * np.exp(phase)
+        
+        phase = 2j * np.pi * np.dot(hkl, atom.frac)
+
+        F += atom.occ * f_total * T * np.exp(phase)
+    
     return F
 
 
