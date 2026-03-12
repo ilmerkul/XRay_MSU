@@ -7,7 +7,7 @@ beta: 90
 gamma: 90
 space_group: 529
 atoms: [
-  ["Fe", 0.0, 0.0, 0.0, 1.0, 1.26]
+  ["Fe", 0.0, 0.0, 0.0, 1.0, 0.4]
 ]
 wavelength: 1.5418
 twotheta_range: [20, 100, 0.02]
