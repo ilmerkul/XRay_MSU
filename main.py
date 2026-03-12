@@ -23,13 +23,16 @@ pattern = PowderPattern(
     cfg.name,
     crystal,
     cfg.wavelength,
-    (20, 100, 0.02),
-    U=0.01,
-    V=-0.005,
-    W=0.005,
-    scale=1.0,
-    profile="stick",
-    eta=0.5,
+    cfg.twotheta_range,
+    U=cfg.U,
+    V=cfg.V,
+    W=cfg.W,
+    scale=cfg.scale,
+    profile=cfg.profile,
+    eta=cfg.eta,
+    intensity_units=cfg.intensity_units,
+    normalize_intensity=cfg.normalize_intensity,
+    intensity_max_value=cfg.intensity_max_value,
 )
 
 plot = Plot(pattern)

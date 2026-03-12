@@ -14,6 +14,40 @@ class NumpyEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
+def array_weight(arr):
+    """
+    Возвращает вес массива, равный числу инверсий.
+    Чем ближе массив к обратному порядку, тем больше вес.
+    """
+
+    # Вспомогательная рекурсивная функция сортировки слиянием,
+    # которая попутно подсчитывает инверсии.
+    def merge_count_inv(subarr):
+        if len(subarr) <= 1:
+            return subarr, 0
+        mid = len(subarr) // 2
+        left, inv_left = merge_count_inv(subarr[:mid])
+        right, inv_right = merge_count_inv(subarr[mid:])
+        merged = []
+        i = j = 0
+        inv = inv_left + inv_right
+        while i < len(left) and j < len(right):
+            if left[i] <= right[j]:
+                merged.append(left[i])
+                i += 1
+            else:
+                merged.append(right[j])
+                # Все оставшиеся элементы left[i:] больше right[j]
+                inv += len(left) - i
+                j += 1
+        merged.extend(left[i:])
+        merged.extend(right[j:])
+        return merged, inv
+
+    _, inversions = merge_count_inv(arr)
+    return inversions
+
+
 class PowderPattern:
     def __init__(
         self,
@@ -28,6 +62,9 @@ class PowderPattern:
         profile="pvoigt",
         eta=0.5,
         bg_poly=None,
+        intensity_units="arbitrary",
+        normalize_intensity=True,
+        intensity_max_value=100.0,
     ):
         self.name = name
         self.crystal = crystal
@@ -40,6 +77,9 @@ class PowderPattern:
         self.profile = profile
         self.eta = eta
         self.bg_poly = bg_poly if bg_poly is not None else [0, 0, 0]
+        self.intensity_units = intensity_units
+        self.normalize_intensity = normalize_intensity
+        self.intensity_max_value = intensity_max_value
 
         self.reflections = self._generate_reflections(d_min=self.wavelength / 2.0)
         self.ycalc, self.hkl_labels = self._convolve()
@@ -94,6 +134,9 @@ class PowderPattern:
                                 pos > hkl_name_pos
                                 or pos == hkl_name_pos
                                 and sqsum < hkl_name_sqsum
+                                or pos == hkl_name_pos
+                                and sqsum == hkl_name_sqsum
+                                and array_weight(hkl) > array_weight(hkl_name)
                             ):
                                 hkl_name = hkl
                                 hkl_name_pos = pos
@@ -113,6 +156,20 @@ class PowderPattern:
                                     "intensity": intensity,
                                 }
                             )
+
+        if self.normalize_intensity and refs:
+            max_intensity = max(ref["intensity"] for ref in refs)
+            if max_intensity > 0:
+                for ref in refs:
+                    ref["intensity"] = (
+                        ref["intensity"] / max_intensity * self.intensity_max_value
+                    )
+
+        for ref in refs:
+            ref["intensity_units"] = self.intensity_units
+            if self.normalize_intensity:
+                ref["intensity_units"] += " (normalized)"
+
         with open(f"images/{self.name}.json", "w") as f:
             json.dump(refs, f, cls=NumpyEncoder)
         return refs
@@ -176,3 +233,17 @@ class PowderPattern:
 
         bg = np.polyval(self.bg_poly, self.twotheta)
         return y + bg, hkl_labels
+
+    def generate_pattern(self):
+        self.reflections = self._generate_reflections(d_min=self.wavelength / 2.0)
+        self.ycalc, self.hkl_labels = self._convolve()
+
+    def get_pattern_data(self):
+        return self.twotheta, self.ycalc
+
+    def set_params(self, **kwargs):
+        for key, value in kwargs.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+            else:
+                raise AttributeError(f"PowderPattern has no attribute '{key}'")
