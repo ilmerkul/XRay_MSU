@@ -32,6 +32,8 @@ class PowderPattern:
         intensity_units="arbitrary",
         normalize_intensity=True,
         intensity_max_value=100.0,
+        save_ref: bool=False,
+        intensity_min:float=1e-6,
     ):
         self.name = name
         self.crystal = crystal
@@ -47,6 +49,8 @@ class PowderPattern:
         self.intensity_units = intensity_units
         self.normalize_intensity = normalize_intensity
         self.intensity_max_value = intensity_max_value
+        self.save_ref =save_ref
+        self.intensity_min = intensity_min
 
         self.reflections = self._generate_reflections(d_min=self.wavelength / 2.0)
         self.ycalc, self.hkl_labels = self._convolve()
@@ -106,7 +110,7 @@ class PowderPattern:
 
                     lp = lp_factor(twoth)
                     intensity = self.scale * mult * lp * np.abs(F) ** 2
-                    if intensity > 1e-6:
+                    if intensity >= self.intensity_min:
                         refs.append(
                             {
                                 "hkl": hkl_name,
@@ -131,9 +135,9 @@ class PowderPattern:
             ref["intensity_units"] = self.intensity_units
             if self.normalize_intensity:
                 ref["intensity_units"] += " (normalized)"
-
-        with open(f"images/{self.name}.json", "w") as f:
-            json.dump(refs, f, cls=NumpyEncoder)
+        if self.save_ref:
+            with open(f"images/{self.name}.json", "w") as f:
+                json.dump(refs, f, cls=NumpyEncoder)
         return refs
 
     def _convolve(self):

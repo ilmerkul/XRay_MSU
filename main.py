@@ -5,7 +5,7 @@ from src.model.crystal.crystal import Crystal
 from src.model.pattern.plot import Plot
 from src.model.pattern.powder import PowderPattern
 
-cfg = OmegaConf.load("config/Mg.yaml")
+cfg = OmegaConf.load("config/test.yaml")
 
 crystal = Crystal(
     cfg.a,

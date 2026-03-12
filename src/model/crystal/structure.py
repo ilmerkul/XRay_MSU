@@ -24,7 +24,7 @@ def structure_factor(crystal, hkl, th, wavelength):
     complex
         Структурный фактор F = Σ occ * (f0 + f' + i f'') * T * exp(2πi (h·x))
     """
-    s_val = np.sin(th) / wavelength
+    s_val = sin(th) / wavelength
     F = 0.0 + 0.0j
 
     for atom in crystal.full_atoms:
