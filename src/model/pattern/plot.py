@@ -22,7 +22,7 @@ class Plot:
         plt.ylabel("Intensity")
         plt.title(self.powder.name)
         for hkl, x, y in self.powder.hkl_labels:
-            plt.text(x, y, str(hkl))
+            plt.text(x, y, str(hkl), fontsize=6)
         plt.legend()
         plt.grid(True)
         plt.savefig(path / f"{self.powder.name}_powder.png")

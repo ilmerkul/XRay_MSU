@@ -12,12 +12,12 @@ atoms: [
 ]
 wavelength: 1.5418
 twotheta_range: [20, 100, 0.02]
-U: 0.01,
-V: -0.005,
-W: 0.005,
-scale: 1.0,
+U: 0.01
+V: -0.005
+W: 0.005
+scale: 1.0
 profile: "stick"
-eta: 0.5,
+eta: 0.5
 intensity_units: "arbitrary"
 normalize_intensity: true
 intensity_max_value: 100
