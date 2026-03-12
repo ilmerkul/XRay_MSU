@@ -1,57 +1,194 @@
 import numpy as np
+import spglib
+
+symbol_to_number = {
+    "H": 1,
+    "He": 2,
+    "Li": 3,
+    "Be": 4,
+    "B": 5,
+    "C": 6,
+    "N": 7,
+    "O": 8,
+    "F": 9,
+    "Ne": 10,
+    "Na": 11,
+    "Mg": 12,
+    "Al": 13,
+    "Si": 14,
+    "P": 15,
+    "S": 16,
+    "Cl": 17,
+    "Ar": 18,
+    "K": 19,
+    "Ca": 20,
+    "Sc": 21,
+    "Ti": 22,
+    "V": 23,
+    "Cr": 24,
+    "Mn": 25,
+    "Fe": 26,
+    "Co": 27,
+    "Ni": 28,
+    "Cu": 29,
+    "Zn": 30,
+    "Ga": 31,
+    "Ge": 32,
+    "As": 33,
+    "Se": 34,
+    "Br": 35,
+    "Kr": 36,
+    "Rb": 37,
+    "Sr": 38,
+    "Y": 39,
+    "Zr": 40,
+    "Nb": 41,
+    "Mo": 42,
+    "Tc": 43,
+    "Ru": 44,
+    "Rh": 45,
+    "Pd": 46,
+    "Ag": 47,
+    "Cd": 48,
+    "In": 49,
+    "Sn": 50,
+    "Sb": 51,
+    "Te": 52,
+    "I": 53,
+    "Xe": 54,
+    "Cs": 55,
+    "Ba": 56,
+    # ... можно добавить остальные
+}
 
 
 class SpaceGroup:
     def __init__(self, generators):
         self.generators = generators
-        self.operations = self._generate_operations()
+        self.operations = self.generate_space_group(mod_lattice=False)
+        self.lattice_operations = self.generate_space_group(mod_lattice=True)
 
-    def _generate_operations(self):
-        def make_hashable(R, t):
-            R_tuple = tuple(tuple(row) for row in R)
-            t_tuple = tuple(np.round(t, decimals=10))
+    @staticmethod
+    def from_spacegroup_number(number):
+        spg_type = spglib.get_spacegroup_type(number)
+        hall_number = spg_type.hall_number
+        print(
+            f"Hall number: {hall_number}\nSchoenflies: {spg_type.schoenflies}\nInternational: {spg_type.international_full}"
+        )
+        sym = spglib.get_symmetry_from_database(hall_number)
+        rotations = sym["rotations"]
+        translations = sym["translations"]
+
+        generators = list(zip(rotations, translations))
+        return SpaceGroup(generators)
+
+    @staticmethod
+    def from_structure(lattice, positions, atom_types, symprec=1e-5):
+        if isinstance(atom_types[0], str):
+            numbers = [symbol_to_number.get(s, 0) for s in atom_types]
+        else:
+            numbers = atom_types
+
+        cell = (lattice, positions, numbers)
+        try:
+            symmetry = spglib.get_symmetry(cell, symprec=symprec)
+            rotations = symmetry["rotations"]
+            translations = symmetry["translations"]
+        except Exception as e:
+            raise RuntimeError("Failed to determine symmetry from structure.") from e
+
+        generators = list(zip(rotations, translations))
+        return SpaceGroup(generators)
+
+    def generate_space_group(self, mod_lattice=False, tol=1e-8, max_elements=100):
+        if not self.generators:
+            dim = 3
+        else:
+            R0, _ = self.generators[0]
+            dim = R0.shape[0]
+
+        I = np.eye(dim)
+        zero = np.zeros(dim)
+
+        def frac_part(t, mod_lattice=False):
+            if not mod_lattice:
+                return t - np.floor(t)
+            return t
+
+        def canonical(R, t):
+            t_adj = frac_part(t, mod_lattice=mod_lattice)
+            decimals = int(-np.log10(tol)) + 1
+            R_rounded = np.round(R, decimals)
+            t_rounded = np.round(t_adj, decimals)
+            t_rounded = frac_part(t_rounded, mod_lattice=mod_lattice)
+            R_tuple = tuple(tuple(row) for row in R_rounded)
+            t_tuple = tuple(t_rounded)
             return (R_tuple, t_tuple)
 
-        I = np.eye(3, dtype=int)
-        t0 = np.zeros(3)
-        identity = make_hashable(I, t0)
+        def compose(tr1, tr2):
+            R1, t1 = tr1
+            R2, t2 = tr2
+            R = R1 @ R2
+            t = R1 @ t2 + t1
+            t = frac_part(t, mod_lattice=mod_lattice)
+            return (R, t)
 
-        ops_set = {identity}
-        ops_list = [identity]
+        def inverse(tr):
+            R, t = tr
+            R_inv = np.linalg.inv(R)
+            t_inv = -R_inv @ t
+            t_inv = frac_part(t_inv, mod_lattice=mod_lattice)
+            return (R_inv, t_inv)
 
-        new_ops = [identity]
-        while new_ops:
-            R1_hash, t1_hash = new_ops.pop()
+        elements = {}
 
-            R1 = np.array(R1_hash)
-            t1 = np.array(t1_hash)
-            for Rg, tg in self.generators:
-                R_new = Rg @ R1
-                t_new = (Rg @ t1 + tg) % 1.0
-                new_hash = make_hashable(R_new, t_new)
-                if new_hash not in ops_set:
-                    ops_set.add(new_hash)
-                    ops_list.append(new_hash)
-                    new_ops.append(new_hash)
+        key_id = canonical(I, zero)
+        elements[key_id] = (I.copy(), zero.copy())
 
-        self.operations = [(np.array(R), np.array(t)) for R, t in ops_list]
-        return self.operations
+        for R, t in self.generators:
+            R = np.asarray(R)
+            t = np.asarray(t)
 
-    def apply(self, x):
+            key = canonical(R, t)
+            if key not in elements:
+                elements[key] = (R.copy(), t.copy())
+
+            R_inv, t_inv = inverse((R, t))
+            key_inv = canonical(R_inv, t_inv)
+            if key_inv not in elements:
+                elements[key_inv] = (R_inv, t_inv)
+
+        changed = True
+        while changed and len(elements) <= max_elements:
+            changed = False
+            current = list(elements.values())
+            n = len(current)
+            for i in range(n):
+                for j in range(n):
+                    new_R, new_t = compose(current[i], current[j])
+                    key = canonical(new_R, new_t)
+                    if key not in elements:
+                        elements[key] = (new_R, new_t)
+                        changed = True
+                        if len(elements) > max_elements:
+                            return list(elements.values())
+
+        return list(elements.values())
+
+    @property
+    def rotations(self):
+        return [R for R, t in self.operations]
+
+    @property
+    def translations(self):
+        return [t for R, t in self.operations]
+
+    def apply(self, x, mod_lattice=False):
+        ops = self.operations
+        if mod_lattice:
+            ops = self.lattice_operations
         positions = []
-        for R, t in self.operations:
+        for R, t in ops:
             x_new = R @ x + t
-            positions.append(x_new % 1.0)
+            positions.append(x_new)
         return positions
-
-
-def multiplicity(crystal, hkl):
-    hkl = np.array(hkl, dtype=float)
-    orbits = set()
-    for R in crystal.rotations:
-        R_inv = np.round(np.linalg.inv(R)).astype(int)
-        hkl_rot = R_inv.T @ hkl
-        hkl_rounded = tuple(int(round(x)) for x in hkl_rot)
-        orbits.add(hkl_rounded)
-    print(orbits, hkl)
-    return len(orbits)

@@ -3,7 +3,7 @@ import numpy as np
 
 def lp_factor(twotheta):
     th = np.radians(twotheta / 2)
-    return (1 + np.cos(2 * th)**2) / (np.sin(th) ** 2 * np.cos(th))
+    return (1 + np.cos(2 * th) ** 2) / (np.sin(th) ** 2 * np.cos(th))
 
 
 def gaussian(x, centre, fwhm):

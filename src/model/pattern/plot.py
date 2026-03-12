@@ -1,8 +1,11 @@
+from pathlib import Path
+from typing import Union
+
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 
-from src.model.crystal.crystal import lattice_to_matrix
+from src.model.crystal.crystal import Crystal
 from src.model.pattern.powder import PowderPattern
 
 
@@ -10,7 +13,9 @@ class Plot:
     def __init__(self, powder: PowderPattern):
         self.powder = powder
 
-    def plot_curve(self):
+    def plot_curve(self, path: Union[str, Path] = "."):
+        if isinstance(path, str):
+            path = Path(path)
         plt.figure(figsize=(10, 4))
         plt.plot(self.powder.twotheta, self.powder.ycalc, label=self.powder.name)
         plt.xlabel("2θ (deg)")
@@ -20,7 +25,9 @@ class Plot:
             plt.text(x, y, str(hkl))
         plt.legend()
         plt.grid(True)
-        plt.savefig(f"{self.powder.name}.png")
+        plt.savefig(path / f"{self.powder.name}_powder.png")
+
+        self.powder.crystal.save_image(filename=path / f"{self.powder.name}.png")
 
     def plot_point(self):
         y_exp_synth = self.powder.ycalc + np.random.normal(
@@ -77,7 +84,12 @@ class Plot:
         plt.savefig("2.png")
 
     def residual(
-        params, twotheta_exp, y_exp, crystal_template, wavelength, profile="pvoigt"
+        params,
+        twotheta_exp,
+        y_exp,
+        crystal_template: Crystal,
+        wavelength,
+        profile="pvoigt",
     ):
         scale, U, V, W, eta, a = params
         crystal_copy = crystal_template.copy()
@@ -85,7 +97,7 @@ class Plot:
         crystal_copy.b = a
         crystal_copy.c = a
         crystal_copy._compute_metrics()
-        crystal_copy._lattice_matrix = lattice_to_matrix(a, a, a, 90, 90, 90)
+        crystal_copy._lattice_matrix = Crystal.lattice_to_matrix(a, a, a, 90, 90, 90)
 
         crystal_copy.rotations, crystal_copy.translations = (
             crystal_copy._get_symmetry_operations()

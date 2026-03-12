@@ -1,14 +1,13 @@
 from math import sin
 
 import numpy as np
-
-
 import xraylib
+
 
 def structure_factor(crystal, hkl, th, wavelength):
     """
     Вычисляет структурный фактор F(hkl) с учётом аномальной дисперсии.
-    
+
     Параметры
     ----------
     crystal : Crystal
@@ -27,22 +26,24 @@ def structure_factor(crystal, hkl, th, wavelength):
     """
     s_val = np.sin(th) / wavelength
     F = 0.0 + 0.0j
-    
+
     for atom in crystal.full_atoms:
         f0 = xraylib.FF_Rayl(xraylib.SymbolToAtomicNumber(atom.element), s_val)
 
         energy_keV = 12.398 / wavelength
         f_prime = xraylib.Fi(xraylib.SymbolToAtomicNumber(atom.element), energy_keV)
-        f_double_prime = xraylib.Fii(xraylib.SymbolToAtomicNumber(atom.element), energy_keV)
+        f_double_prime = xraylib.Fii(
+            xraylib.SymbolToAtomicNumber(atom.element), energy_keV
+        )
 
         f_total = f0 + f_prime + 1j * f_double_prime
-        
+
         T = np.exp(-atom.Biso * s_val**2)
-        
+
         phase = 2j * np.pi * np.dot(hkl, atom.frac)
 
         F += atom.occ * f_total * T * np.exp(phase)
-    
+
     return F
 
 

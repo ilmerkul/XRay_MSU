@@ -5,8 +5,7 @@ from src.model.crystal.crystal import Crystal
 from src.model.pattern.plot import Plot
 from src.model.pattern.powder import PowderPattern
 
-#cfg = OmegaConf.load("config/Si.yaml")
-cfg = OmegaConf.load("config/NaCl.yaml")
+cfg = OmegaConf.load("config/Cu.yaml")
 
 crystal = Crystal(
     cfg.a,
@@ -35,4 +34,4 @@ pattern = PowderPattern(
 
 plot = Plot(pattern)
 
-plot.plot_curve()
+plot.plot_curve(path="images")

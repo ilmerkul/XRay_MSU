@@ -1,0 +1,12 @@
+name: "Cu"
+a: 3.61
+b: 3.61
+c: 3.61
+alpha: 90
+beta: 90
+gamma: 90
+space_group: 523
+atoms: [
+  ["Cu", 0.0, 0.0, 0.0, 1.0, 1.28]
+]
+wavelength: 1.5418
