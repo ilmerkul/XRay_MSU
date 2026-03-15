@@ -5,7 +5,7 @@ from src.model.crystal.crystal import Crystal
 from src.model.pattern.plot import Plot
 from src.model.pattern.powder import PowderPattern
 
-cfg = OmegaConf.load("config/test.yaml")
+cfg = OmegaConf.load("config/test1.yaml")
 
 asf = AtomicScatteringFactor("data/f0_WaasKirf.dat")
 
@@ -40,4 +40,4 @@ pattern = PowderPattern(
 
 plot = Plot(powder=pattern)
 
-plot.plot_curve(path="images")
+plot.plot_curve(path=f"runs/{cfg.name}/")

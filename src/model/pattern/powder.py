@@ -1,6 +1,7 @@
 import json
 
 import numpy as np
+import os
 import csv
 from typing import Dict
 
@@ -149,11 +150,13 @@ class PowderPattern:
         return refs
     
     def save_refs(self, refs: Dict[str, float]):
+        os.makedirs(f"runs/{self.name}", exist_ok=True)
+
         if self.save_ref:
-            with open(f"images/{self.name}.json", "w") as f:
+            with open(f"runs/{self.name}/{self.name}.json", "w") as f:
                 json.dump(refs, f, cls=NumpyEncoder)
 
-        with open(f"images/{self.name}.tsv", "w", newline="", encoding="utf-8") as f:
+        with open(f"runs/{self.name}/{self.name}.tsv", "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f, delimiter="\t")
             writer.writerow(list(refs[0].keys()))
 
@@ -172,6 +175,9 @@ class PowderPattern:
                 hkl_str = f"{hkl[0]} {hkl[1]} {hkl[2]}"
 
                 writer.writerow([hkl_str, f"{d:.3f}", f"{theta:.3f}", f"{twotheta:.3f}", mult, f"{l:.3f}", f"{p:.3f}", f"{lp:.3f}", f"{F:.3f}", f"{intensity:.3f}"])
+        
+        np.savetxt(f"runs/{self.name}/G.csv", self.crystal.G, delimiter=',')
+        np.savetxt(f"runs/{self.name}/Gstar.csv", self.crystal.Gstar, delimiter=',')
 
     def _convolve(self):
         y = np.zeros_like(self.twotheta)

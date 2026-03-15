@@ -4,6 +4,7 @@ from typing import Union
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
+import os
 
 from src.model.crystal.crystal import Crystal
 from src.model.pattern.powder import PowderPattern
@@ -14,6 +15,8 @@ class Plot:
         self.powder = powder
 
     def plot_curve(self, path: Union[str, Path] = "."):
+        os.makedirs(path, exist_ok=True)
+
         if isinstance(path, str):
             path = Path(path)
         plt.figure(figsize=(10, 4))
