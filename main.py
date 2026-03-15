@@ -1,29 +1,32 @@
 from omegaconf import OmegaConf
 
-from src.model.atom.atom import Atom
+from src.model.atom.atom import Atom, AtomicScatteringFactor
 from src.model.crystal.crystal import Crystal
 from src.model.pattern.plot import Plot
 from src.model.pattern.powder import PowderPattern
 
 cfg = OmegaConf.load("config/test.yaml")
 
+asf = AtomicScatteringFactor("data/f0_WaasKirf.dat")
+
 crystal = Crystal(
-    cfg.a,
-    cfg.b,
-    cfg.c,
-    cfg.alpha,
-    cfg.beta,
-    cfg.gamma,
-    cfg.space_group,
-    [Atom(*atom) for atom in cfg.atoms],
+    a=cfg.a,
+    b=cfg.b,
+    c=cfg.c,
+    alpha=cfg.alpha,
+    beta=cfg.beta,
+    gamma=cfg.gamma,
+    asf=asf,
+    spacegroup_number=cfg.space_group,
+    atoms=[Atom(*atom) for atom in cfg.atoms],
 )
 
-
 pattern = PowderPattern(
-    cfg.name,
-    crystal,
-    cfg.wavelength,
-    cfg.twotheta_range,
+    name=cfg.name,
+    crystal=crystal,
+    wavelength=cfg.wavelength,
+    twotheta_range=cfg.twotheta_range,
+    thetam_deg=cfg.thetam_deg,
     U=cfg.U,
     V=cfg.V,
     W=cfg.W,
@@ -35,6 +38,6 @@ pattern = PowderPattern(
     intensity_max_value=cfg.intensity_max_value,
 )
 
-plot = Plot(pattern)
+plot = Plot(powder=pattern)
 
 plot.plot_curve(path="images")

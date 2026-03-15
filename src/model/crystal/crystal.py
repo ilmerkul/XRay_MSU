@@ -3,7 +3,7 @@ from typing import List, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 
-from ..atom.atom import Atom
+from ..atom.atom import Atom, AtomicScatteringFactor
 from ..group.space import SpaceGroup
 
 default_colors = {
@@ -126,11 +126,14 @@ class Crystal:
         alpha: float,
         beta: float,
         gamma: float,
+        asf: AtomicScatteringFactor,
         spacegroup_number: int = None,
         atoms: List[Atom] = None,
         symprec: float = 1e-5,
         spacegroup: SpaceGroup = None,
     ):
+        self.asf = asf
+
         self.a = a
         self.b = b
         self.c = c
@@ -296,9 +299,7 @@ class Crystal:
             )
 
             if show_labels:
-                # Формируем подпись с дробными координатами, округлёнными до 2 знаков
                 label = f"({atom.frac[0]:.2f}, {atom.frac[1]:.2f}, {atom.frac[2]:.2f})"
-                # Размещаем текст так, чтобы он не налезал на точку
                 ax.text(
                     cart[0], cart[1], cart[2], label, ha="left", va="bottom", fontsize=6
                 )

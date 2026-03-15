@@ -1,10 +1,13 @@
-from math import sin
+from math import sin, pi
+from typing import Tuple
 
 import numpy as np
 import xraylib
 
+from ..crystal.crystal import Crystal
 
-def structure_factor(crystal, hkl, th, wavelength):
+
+def structure_factor(crystal: Crystal, hkl: Tuple[float], th: float, wavelength: float, local: bool=True):
     """
     Вычисляет структурный фактор F(hkl) с учётом аномальной дисперсии.
 
@@ -28,15 +31,20 @@ def structure_factor(crystal, hkl, th, wavelength):
     F = 0.0 + 0.0j
 
     for atom in crystal.full_atoms:
-        f0 = xraylib.FF_Rayl(xraylib.SymbolToAtomicNumber(atom.element), s_val)
+        if local:
+            f_total = crystal.asf.get_f0_from_theta_lambda(symbol=atom.element, 
+                                                           theta_deg=th * 180 / pi, 
+                                                           lambda_ang=wavelength)
+        else:
+            f0 = xraylib.FF_Rayl(xraylib.SymbolToAtomicNumber(atom.element), s_val)
 
-        energy_keV = 12.398 / wavelength
-        f_prime = xraylib.Fi(xraylib.SymbolToAtomicNumber(atom.element), energy_keV)
-        f_double_prime = xraylib.Fii(
-            xraylib.SymbolToAtomicNumber(atom.element), energy_keV
-        )
+            energy_keV = 12.398 / wavelength
+            f_prime = xraylib.Fi(xraylib.SymbolToAtomicNumber(atom.element), energy_keV)
+            f_double_prime = xraylib.Fii(
+                xraylib.SymbolToAtomicNumber(atom.element), energy_keV
+            )
 
-        f_total = f0 + f_prime + 1j * f_double_prime
+            f_total = f0 + f_prime + 1j * f_double_prime
 
         T = np.exp(-atom.Biso * s_val**2)
 

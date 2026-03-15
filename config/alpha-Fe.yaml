@@ -11,6 +11,7 @@ atoms: [
 ]
 wavelength: 1.5418
 twotheta_range: [20, 100, 0.02]
+thetam_deg: 0.
 U: 0.01
 V: -0.005
 W: 0.005

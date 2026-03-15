@@ -1,6 +1,8 @@
 import json
 
 import numpy as np
+import csv
+from typing import Dict
 
 from ..crystal.crystal import Crystal
 from ..crystal.structure import structure_factor
@@ -10,7 +12,8 @@ from .utils import (
     caglioti_fwhm,
     gaussian,
     lorentzian,
-    lp_factor,
+    p_factor,
+    l_factor,
     pseudo_voigt,
 )
 
@@ -18,20 +21,21 @@ from .utils import (
 class PowderPattern:
     def __init__(
         self,
-        name,
+        name: str,
         crystal: Crystal,
-        wavelength,
-        twotheta_range,
-        U=0.01,
-        V=-0.01,
-        W=0.005,
-        scale=1.0,
-        profile="pvoigt",
-        eta=0.5,
+        wavelength: float,
+        twotheta_range: np.ndarray,
+        thetam_deg: float,
+        U:float=0.01,
+        V:float=-0.01,
+        W:float=0.005,
+        scale:float=1.0,
+        profile:str="pvoigt",
+        eta:float=0.5,
         bg_poly=None,
-        intensity_units="arbitrary",
-        normalize_intensity=True,
-        intensity_max_value=100.0,
+        intensity_units:str="arbitrary",
+        normalize_intensity:bool=True,
+        intensity_max_value:float=100.0,
         save_ref: bool = False,
         intensity_min: float = 1e-6,
     ):
@@ -41,6 +45,7 @@ class PowderPattern:
         self.twotheta = np.arange(
             twotheta_range[0], twotheta_range[1], twotheta_range[2]
         )
+        self.thetam_deg = thetam_deg
         self.U, self.V, self.W = U, V, W
         self.scale = scale
         self.profile = profile
@@ -108,8 +113,11 @@ class PowderPattern:
                             hkl_name_pos = pos
                             hkl_name_sqsum = sqsum
 
-                    lp = lp_factor(twoth)
-                    intensity = self.scale * mult * lp * np.abs(F) ** 2
+                    lf = l_factor(twotheta_deg=twoth)
+                    pf = p_factor(twotheta_deg=twoth,
+                                   thetam_deg=self.thetam_deg)
+                    lpf = lf * pf
+                    intensity = self.scale * mult * lpf * np.abs(F) ** 2
                     if intensity >= self.intensity_min:
                         refs.append(
                             {
@@ -117,7 +125,9 @@ class PowderPattern:
                                 "d": d,
                                 "twotheta": twoth,
                                 "mult": mult,
-                                "lp": lp,
+                                "l": lf,
+                                "p": pf,
+                                "lp": lpf,
                                 "F": F,
                                 "intensity": intensity,
                             }
@@ -135,10 +145,33 @@ class PowderPattern:
             ref["intensity_units"] = self.intensity_units
             if self.normalize_intensity:
                 ref["intensity_units"] += " (normalized)"
+        self.save_refs(refs)
+        return refs
+    
+    def save_refs(self, refs: Dict[str, float]):
         if self.save_ref:
             with open(f"images/{self.name}.json", "w") as f:
                 json.dump(refs, f, cls=NumpyEncoder)
-        return refs
+
+        with open(f"images/{self.name}.tsv", "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f, delimiter="\t")
+            writer.writerow(list(refs[0].keys()))
+
+            for ref in refs[::-1]:
+                hkl = ref["hkl"]
+                d = ref["d"]
+                twotheta = ref["twotheta"]
+                theta = twotheta / 2.0
+                mult = ref["mult"]
+                l = ref["l"]
+                p = ref["p"]
+                lp = ref["lp"]
+                F = ref["F"]
+                intensity = ref["intensity"]
+
+                hkl_str = f"{hkl[0]} {hkl[1]} {hkl[2]}"
+
+                writer.writerow([hkl_str, f"{d:.3f}", f"{theta:.3f}", f"{twotheta:.3f}", mult, f"{l:.3f}", f"{p:.3f}", f"{lp:.3f}", f"{F:.3f}", f"{intensity:.3f}"])
 
     def _convolve(self):
         y = np.zeros_like(self.twotheta)
