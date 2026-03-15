@@ -149,7 +149,13 @@ class Crystal:
         if spacegroup is not None:
             self.spacegroup = spacegroup
         elif spacegroup_number is not None:
-            self.spacegroup = SpaceGroup.from_spacegroup_number(spacegroup_number)
+            self.spacegroup = SpaceGroup.from_spacegroup_number(
+                number=spacegroup_number
+            )
+        elif len(atoms) != 0:
+            self.spacegroup = SpaceGroup.from_structure(
+                lattice=self._lattice_matrix, atoms=atoms, symprec=symprec
+            )
         else:
             raise ValueError("Either spacegroup or spacegroup_number must be provided.")
 

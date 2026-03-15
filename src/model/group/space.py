@@ -1,5 +1,9 @@
+from typing import List
+
 import numpy as np
 import spglib
+
+from ..atom.atom import Atom
 
 symbol_to_number = {
     "H": 1,
@@ -83,19 +87,14 @@ class SpaceGroup:
         return SpaceGroup(generators)
 
     @staticmethod
-    def from_structure(lattice, positions, atom_types, symprec=1e-5):
-        if isinstance(atom_types[0], str):
-            numbers = [symbol_to_number.get(s, 0) for s in atom_types]
-        else:
-            numbers = atom_types
+    def from_structure(lattice: List[float], atoms: List[Atom], symprec: float = 1e-5):
+        positions = [atom.frac for atom in atoms]
+        numbers = [symbol_to_number.get(atom.element, 0) for atom in atoms]
 
         cell = (lattice, positions, numbers)
-        try:
-            symmetry = spglib.get_symmetry(cell, symprec=symprec)
-            rotations = symmetry["rotations"]
-            translations = symmetry["translations"]
-        except Exception as e:
-            raise RuntimeError("Failed to determine symmetry from structure.") from e
+        symmetry = spglib.get_symmetry(cell=cell, symprec=symprec)
+        rotations = symmetry["rotations"]
+        translations = symmetry["translations"]
 
         generators = list(zip(rotations, translations))
         return SpaceGroup(generators)

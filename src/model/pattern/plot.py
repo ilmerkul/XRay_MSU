@@ -1,10 +1,10 @@
+import os
 from pathlib import Path
 from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy
-import os
 
 from src.model.crystal.crystal import Crystal
 from src.model.pattern.powder import PowderPattern

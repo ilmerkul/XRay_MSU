@@ -7,13 +7,17 @@ def l_factor(twotheta_deg: float):
     th = np.radians(twotheta_deg / 2)
     return 1 / (np.sin(th) ** 2 * np.cos(th))
 
-def p_factor(twotheta_deg: float, thetam_deg:float):
+
+def p_factor(twotheta_deg: float, thetam_deg: float):
     th = np.radians(twotheta_deg / 2)
     thm = np.radians(thetam_deg)
     return (1 + np.cos(2 * th) ** 2 * np.cos(2 * thm) ** 2) / (1 + np.cos(2 * thm) ** 2)
 
-def lp_factor(twotheta_deg: float, thetam_deg:float):
-    return l_factor(twotheta_deg=twotheta_deg) * p_factor(twotheta_deg=twotheta_deg, thetam_deg=thetam_deg)
+
+def lp_factor(twotheta_deg: float, thetam_deg: float):
+    return l_factor(twotheta_deg=twotheta_deg) * p_factor(
+        twotheta_deg=twotheta_deg, thetam_deg=thetam_deg
+    )
 
 
 def gaussian(x, centre, fwhm):

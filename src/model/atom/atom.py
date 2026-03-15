@@ -1,5 +1,6 @@
-import numpy as np
 import math
+
+import numpy as np
 
 
 class Atom:
@@ -16,14 +17,14 @@ class AtomicScatteringFactor:
         self._parse(filename)
 
     def _parse(self, filename):
-        with open(filename, 'r') as f:
+        with open(filename, "r") as f:
             lines = f.readlines()
 
         i = 0
         n = len(lines)
         while i < n:
             line = lines[i].strip()
-            if line.startswith('#S'):
+            if line.startswith("#S"):
                 parts = line.split(maxsplit=2)
                 if len(parts) < 3:
                     i += 1
@@ -33,7 +34,7 @@ class AtomicScatteringFactor:
                 i += 1
                 while i < n:
                     data_line = lines[i].strip()
-                    if data_line and not data_line.startswith('#'):
+                    if data_line and not data_line.startswith("#"):
                         tokens = data_line.split()
                         if len(tokens) == 11:
                             a = list(map(float, tokens[:5]))
