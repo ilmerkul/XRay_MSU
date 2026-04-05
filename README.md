@@ -38,7 +38,7 @@ uv sync --group dev        # PyInstaller для сборки бинарнико�
 ## GitHub Actions и релизы
 
 - Workflow **[build-binaries](.github/workflows/build-binaries.yml)** на push в `main` (по путям исходников) собирает артефакты для **Windows** и **Linux**; вложения можно скачать на вкладке **Actions**.
-- По push тега **`v*`** запускается **[release](.github/workflows/release.yml)**: повторная сборка и публикация **GitHub Release** с вложениями (`*.exe` и архив Linux).
+- По push тега **`v*`** запускается **[release](.github/workflows/release.yml)**: в одном run собираются **windows** и **linux**, затем job **publish** скачивает артефакты и создаёт **GitHub Release** с `xray-msu-gui.exe`, `xray-msu-cli.exe`, `xray-msu-linux-amd64.tar.gz`.
 
 Создание релиза:
 
