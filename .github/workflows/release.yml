@@ -100,8 +100,8 @@ jobs:
       - name: Архив Linux
         run: |
           set -eux
-          test -d artifacts/linux/dist
-          tar -czvf xray-msu-linux-amd64.tar.gz -C artifacts/linux dist
+          test -d artifacts/linux
+          tar -czvf xray-msu-linux-amd64.tar.gz -C artifacts/linux .
 
       - name: Собрать вложения
         run: |
