@@ -1,28 +1,23 @@
+import glob
+import json
+import os
 import tkinter as tk
 from tkinter import messagebox, ttk
 
 import matplotlib
-
-matplotlib.use("TkAgg")
-import glob
-import json
-import os
-
+import matplotlib.pyplot as plt
 import numpy as np
-
+import yaml
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
-try:
-    import yaml
+from .model.atom.atom import Atom, AtomicScatteringFactor
+from .model.crystal.crystal import Crystal
+from .model.pattern.plot import Plot
+from .model.pattern.powder import PowderPattern
+from .runtime_layout import resource_path
 
-    YAML_AVAILABLE = True
-except ImportError:
-    YAML_AVAILABLE = False
-
-from src.model.atom.atom import Atom, AtomicScatteringFactor
-from src.model.crystal.crystal import Crystal
-from src.model.pattern.powder import PowderPattern
+matplotlib.use("TkAgg")
 
 
 class PowderPatternGUI:
@@ -66,6 +61,9 @@ class PowderPatternGUI:
         self.intensity_max_value_var = tk.DoubleVar(value=100.0)
         self.thetam_deg_var = tk.DoubleVar(value=0.0)
         self.intensity_min_var = tk.DoubleVar(value=1e-6)
+        self.multiplicity_mode_var = tk.StringVar(value="symmetry")
+        self.multiplicity_metric_rtol_var = tk.DoubleVar(value=1e-7)
+        self.multiplicity_metric_atol_var = tk.DoubleVar(value=1e-12)
 
         self.config_dir = self.find_config_dir()
         asf_path = self.find_asf_data_path()
@@ -83,6 +81,9 @@ class PowderPatternGUI:
         self.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
 
     def find_config_dir(self):
+        rp = resource_path("config")
+        if rp and os.path.isdir(rp):
+            return rp
         script_dir = os.path.dirname(os.path.abspath(__file__))
         candidate = os.path.join(script_dir, "config")
         if os.path.isdir(candidate):
@@ -94,6 +95,9 @@ class PowderPatternGUI:
         return "config"
 
     def find_asf_data_path(self):
+        rp = resource_path("data", "f0_WaasKirf.dat")
+        if rp and os.path.isfile(rp):
+            return rp
         script_dir = os.path.dirname(os.path.abspath(__file__))
         candidate = os.path.join(script_dir, "data", "f0_WaasKirf.dat")
         if os.path.isfile(candidate):
@@ -346,6 +350,32 @@ class PowderPatternGUI:
         )
         row += 1
 
+        ttk.Label(pattern_frame, text="Multiplicity:").grid(
+            row=row, column=0, sticky="e", padx=5, pady=2
+        )
+        mult_combo = ttk.Combobox(
+            pattern_frame,
+            textvariable=self.multiplicity_mode_var,
+            values=["symmetry", "metric"],
+            state="readonly",
+            width=18,
+        )
+        mult_combo.grid(row=row, column=1, sticky="w", padx=5, pady=2)
+        row += 1
+
+        ttk.Label(pattern_frame, text="Metric mult. rtol / atol:").grid(
+            row=row, column=0, sticky="e", padx=5, pady=2
+        )
+        mult_tol = ttk.Frame(pattern_frame)
+        mult_tol.grid(row=row, column=1, sticky="ew", padx=5, pady=2)
+        ttk.Entry(mult_tol, textvariable=self.multiplicity_metric_rtol_var, width=12).pack(
+            side=tk.LEFT
+        )
+        ttk.Entry(mult_tol, textvariable=self.multiplicity_metric_atol_var, width=12).pack(
+            side=tk.LEFT, padx=(8, 0)
+        )
+        row += 1
+
         ttk.Button(
             self.form_container, text="Generate Pattern", command=self.generate_pattern
         ).pack(pady=10)
@@ -390,10 +420,6 @@ class PowderPatternGUI:
             with open(filepath, "r", encoding="utf-8") as f:
                 return json.load(f)
         elif ext in (".yaml", ".yml"):
-            if not YAML_AVAILABLE:
-                raise ImportError(
-                    "PyYAML is not installed. Please install it to use YAML configs."
-                )
             with open(filepath, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f)
         else:
@@ -522,6 +548,16 @@ class PowderPatternGUI:
             self.thetam_deg_var.set(float(config["thetam_deg"]))
         if "intensity_min" in config:
             self.intensity_min_var.set(float(config["intensity_min"]))
+        if "multiplicity_mode" in config:
+            self.multiplicity_mode_var.set(str(config["multiplicity_mode"]).lower())
+        if "multiplicity_metric_rtol" in config:
+            self.multiplicity_metric_rtol_var.set(
+                float(config["multiplicity_metric_rtol"])
+            )
+        if "multiplicity_metric_atol" in config:
+            self.multiplicity_metric_atol_var.set(
+                float(config["multiplicity_metric_atol"])
+            )
 
     def refresh_atoms_table(self, parent_frame):
         for widgets in self.atom_widgets:
@@ -657,18 +693,39 @@ class PowderPatternGUI:
                 normalize_intensity=self.normalize_intensity_var.get(),
                 intensity_max_value=self.intensity_max_value_var.get(),
                 intensity_min=self.intensity_min_var.get(),
+                multiplicity_mode=self.multiplicity_mode_var.get(),
+                multiplicity_metric_rtol=self.multiplicity_metric_rtol_var.get(),
+                multiplicity_metric_atol=self.multiplicity_metric_atol_var.get(),
             )
 
-            os.makedirs("images", exist_ok=True)
-            crystal.save_image(f"images/{pattern.name}.png")
+            run_dir = f"runs/{pattern.name}/"
+            Plot(pattern).plot_curve(path=run_dir)
+            plt.close("all")
 
             x, y = pattern.get_pattern_data()
             self.ax.clear()
             self.ax.plot(x, y)
             self.ax.set_xlabel("2θ (deg)")
             self.ax.set_ylabel("Intensity")
+            y_top = float(np.max(y)) if len(y) else 1.0
+            y_off = max(y_top * 0.015, 1e-9)
+            for hkl, xc, y_peak in pattern.hkl_labels:
+                h, k, l = (int(round(hkl[0])), int(round(hkl[1])), int(round(hkl[2])))
+                label = f"{h}{k}{l}"
+                self.ax.text(
+                    xc,
+                    y_peak + y_off,
+                    label,
+                    fontsize=6,
+                    ha="center",
+                    va="bottom",
+                )
             self.canvas.draw()
-            messagebox.showinfo("Success", "Pattern generated.")
+            messagebox.showinfo(
+                "Success",
+                f"Saved under runs/{pattern.name}/: "
+                f"{pattern.name}.tsv, G.csv, Gstar.csv, {pattern.name}_powder.png, {pattern.name}.png",
+            )
         except Exception as e:
             messagebox.showerror("Error", f"Failed to generate pattern:\n{str(e)}")
 

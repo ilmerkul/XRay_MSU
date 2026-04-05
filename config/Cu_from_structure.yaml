@@ -24,3 +24,6 @@ eta: 0.5
 intensity_units: "arbitrary"
 normalize_intensity: true
 intensity_max_value: 100
+multiplicity_mode: metric
+multiplicity_metric_rtol: 1.0e-7
+multiplicity_metric_atol: 1.0e-12

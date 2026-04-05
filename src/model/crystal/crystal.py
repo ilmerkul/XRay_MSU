@@ -272,6 +272,40 @@ class Crystal:
             orbits.add(hkl_rounded)
         return len(orbits), orbits
 
+    def invd2_hkl(self, hkl):
+        """1/d² = hᵀ G* h для целочисленных (или вещественных) Миллера."""
+        h = np.array(hkl, dtype=float)
+        return float(np.dot(h, np.dot(self.Gstar, h)))
+
+    def multiplicity_metric(
+        self, hkl, max_index: int, rtol: float = 1e-7, atol: float = 1e-12
+    ):
+        """
+        Кратность и «орбита» через перебор: все целые (h',k',l') в кубе
+        [-max_index, max_index]³ с тем же 1/d² (в пределах rtol/atol), кроме (0,0,0).
+
+        Не совпадает с кристаллографической кратностью, если на одной сфере в
+        обратном пространстве лежат отражения с разными |F| (случайные вырождения).
+        """
+        target = self.invd2_hkl(hkl)
+        if target <= 0:
+            return 1, {Crystal.hkl2tuple(hkl)}
+        scale = max(target, 1.0)
+        orbits = set()
+        for hp in range(-max_index, max_index + 1):
+            for kp in range(-max_index, max_index + 1):
+                for lp in range(-max_index, max_index + 1):
+                    if hp == 0 and kp == 0 and lp == 0:
+                        continue
+                    m = self.invd2_hkl((hp, kp, lp))
+                    if m <= 0:
+                        continue
+                    if np.isclose(m, target, rtol=rtol, atol=atol * scale):
+                        orbits.add(Crystal.hkl2tuple((hp, kp, lp)))
+        if not orbits:
+            return 1, {Crystal.hkl2tuple(hkl)}
+        return len(orbits), orbits
+
     def save_image(
         self,
         filename,

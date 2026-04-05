@@ -17,4 +17,9 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = []
+dev = ["pyinstaller>=6.6.0"]
+
+# Предпочитать /usr/bin/python* (дистрибутивный tkinter → libtcl8.6 + python3-tk). Автономные сборки uv
+# часто слинкованы с Tcl 9; на LTS без пакетов libtcl9* ldd даёт «not found» и PyInstaller GUI не собрать.
+[tool.uv]
+python-preference = "system"

@@ -4,7 +4,6 @@ from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy
 
 from src.model.crystal.crystal import Crystal
 from src.model.pattern.powder import PowderPattern
@@ -25,7 +24,7 @@ class Plot:
         plt.ylabel("Intensity")
         plt.title(self.powder.name)
         for hkl, x, y in self.powder.hkl_labels:
-            plt.text(x, y, str(hkl), fontsize=6)
+            plt.text(x, y, "".join(map(str, hkl)), fontsize=6)
         plt.legend()
         plt.grid(True)
         plt.savefig(path / f"{self.powder.name}_powder.png")
@@ -33,6 +32,8 @@ class Plot:
         self.powder.crystal.save_image(filename=path / f"{self.powder.name}.png")
 
     def plot_point(self):
+        import scipy.optimize
+
         y_exp_synth = self.powder.ycalc + np.random.normal(
             0, 0.1 * self.powder.ycalc.max(), size=len(self.powder.twotheta)
         )

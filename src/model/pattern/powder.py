@@ -39,6 +39,9 @@ class PowderPattern:
         intensity_max_value: float = 100.0,
         save_ref: bool = False,
         intensity_min: float = 1e-6,
+        multiplicity_mode: str = "symmetry",
+        multiplicity_metric_rtol: float = 1e-7,
+        multiplicity_metric_atol: float = 1e-12,
     ):
         self.name = name
         self.crystal = crystal
@@ -57,6 +60,19 @@ class PowderPattern:
         self.intensity_max_value = intensity_max_value
         self.save_ref = save_ref
         self.intensity_min = intensity_min
+        _mm = (
+            multiplicity_mode.lower()
+            if isinstance(multiplicity_mode, str)
+            else "symmetry"
+        )
+        if _mm not in ("symmetry", "metric"):
+            raise ValueError(
+                "multiplicity_mode must be 'symmetry' or 'metric', "
+                f"got {multiplicity_mode!r}"
+            )
+        self.multiplicity_mode = _mm
+        self.multiplicity_metric_rtol = multiplicity_metric_rtol
+        self.multiplicity_metric_atol = multiplicity_metric_atol
 
         self.reflections = self._generate_reflections(d_min=self.wavelength / 2.0)
         self.ycalc, self.hkl_labels = self._convolve()
@@ -90,7 +106,15 @@ class PowderPattern:
                         continue
                     twoth = 2 * np.degrees(th)
                     F = structure_factor(self.crystal, (h, k, l), th, self.wavelength)
-                    mult, hkl_group = self.crystal.multiplicity((h, k, l))
+                    if self.multiplicity_mode == "metric":
+                        mult, hkl_group = self.crystal.multiplicity_metric(
+                            (h, k, l),
+                            max_index,
+                            rtol=self.multiplicity_metric_rtol,
+                            atol=self.multiplicity_metric_atol,
+                        )
+                    else:
+                        mult, hkl_group = self.crystal.multiplicity((h, k, l))
                     orbits.update(hkl_group)
 
                     hkl_name = hkl_group.pop()

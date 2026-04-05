@@ -1,3 +1,6 @@
+# Временный markdown для pandoc (make doc-pdf)
+doc/.README_for_pdf.md
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
