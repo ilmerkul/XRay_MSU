@@ -1,15 +1,15 @@
 name: "test"
-a: 12.87
-b: 12.87
-c: 5.642
+a: 1
+b: 2
+c: 3
 alpha: 90
-beta: 120
+beta: 90
 gamma: 90
-space_group: 529
+space_group: null
 atoms: [
-  ["Fe", 0.0, 0.0, 0.0, 1.0, 0.4]
+  ["Cu", 0.0, 0.0, 0.0, 1.0, 0.4]
 ]
-wavelength: 1.5418
+wavelength: 0.71
 twotheta_range: [20, 100, 0.02]
 thetam_deg: 0.
 U: 0.01
@@ -21,3 +21,4 @@ eta: 0.5
 intensity_units: "arbitrary"
 normalize_intensity: true
 intensity_max_value: 100
+intensity_min: 0.

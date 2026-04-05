@@ -1,15 +1,16 @@
-name: "alpha-Fe"
-a: 2.866
-b: 2.866
-c: 2.866
+name: "Alpha-Quartz"
+a: 4.913
+b: 4.913
+c: 5.405
 alpha: 90
 beta: 90
-gamma: 90
-space_group: 529
+gamma: 120
+space_group: 454
 atoms: [
-  ["Fe", 0.0, 0.0, 0.0, 1.0, 0.4]
+  ["Si", 0.4697, 0.0, 0.0, 1.0, 0.5],
+  ["O", 0.4135, 0.2669, 0.1191, 1.0, 0.5]
 ]
-wavelength: 0.71
+wavelength: 1.5418
 twotheta_range: [20, 100, 0.02]
 thetam_deg: 0.
 U: 0.01
@@ -21,4 +22,3 @@ eta: 0.5
 intensity_units: "arbitrary"
 normalize_intensity: true
 intensity_max_value: 100
-intensity_min: 0.0001

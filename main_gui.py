@@ -8,6 +8,8 @@ import glob
 import json
 import os
 
+import numpy as np
+
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
@@ -18,7 +20,7 @@ try:
 except ImportError:
     YAML_AVAILABLE = False
 
-from src.model.atom.atom import Atom
+from src.model.atom.atom import Atom, AtomicScatteringFactor
 from src.model.crystal.crystal import Crystal
 from src.model.pattern.powder import PowderPattern
 
@@ -27,7 +29,11 @@ class PowderPatternGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Powder Pattern Generator")
-        self.root.geometry("1000x800")
+        sw = self.root.winfo_screenwidth()
+        sh = self.root.winfo_screenheight()
+        h = max(600, sh - 100)
+        self.root.geometry(f"{sw}x{h}+0+0")
+        self.root.minsize(min(900, sw), 500)
 
         self.name_var = tk.StringVar(value="NaCl")
 
@@ -37,7 +43,7 @@ class PowderPatternGUI:
         self.alpha_var = tk.DoubleVar(value=90.0)
         self.beta_var = tk.DoubleVar(value=90.0)
         self.gamma_var = tk.DoubleVar(value=90.0)
-        self.space_group_var = tk.IntVar(value=523)
+        self.space_group_var = tk.IntVar(value=225)
 
         self.atoms = [
             {"element": "Na", "x": 0.0, "y": 0.0, "z": 0.0, "occ": 1.0, "biso": 1.6},
@@ -58,15 +64,20 @@ class PowderPatternGUI:
         self.intensity_units_var = tk.StringVar(value="arbitrary")
         self.normalize_intensity_var = tk.BooleanVar(value=True)
         self.intensity_max_value_var = tk.DoubleVar(value=100.0)
+        self.thetam_deg_var = tk.DoubleVar(value=0.0)
+        self.intensity_min_var = tk.DoubleVar(value=1e-6)
 
         self.config_dir = self.find_config_dir()
+        asf_path = self.find_asf_data_path()
+        self.asf = AtomicScatteringFactor(asf_path)
         self.config_files = {}
         self.atoms_frame = None
 
         self.create_widgets()
         self.scan_config_files()
 
-        self.figure = Figure(figsize=(6, 4), dpi=100)
+        fig_w = max(6.0, min(16.0, (sw - 80) / 100))
+        self.figure = Figure(figsize=(fig_w, 4.5), dpi=100)
         self.ax = self.figure.add_subplot(111)
         self.canvas = FigureCanvasTkAgg(self.figure, master=self.root)
         self.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
@@ -82,35 +93,33 @@ class PowderPatternGUI:
             return candidate
         return "config"
 
+    def find_asf_data_path(self):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        candidate = os.path.join(script_dir, "data", "f0_WaasKirf.dat")
+        if os.path.isfile(candidate):
+            return candidate
+        parent_dir = os.path.dirname(script_dir)
+        candidate = os.path.join(parent_dir, "data", "f0_WaasKirf.dat")
+        if os.path.isfile(candidate):
+            return candidate
+        return os.path.join(script_dir, "data", "f0_WaasKirf.dat")
+
     def create_widgets(self):
-        main_frame = ttk.Frame(self.root)
-        main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        canvas = tk.Canvas(main_frame)
-        scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-
-        scrollable_frame.bind(
-            "<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.form_container = ttk.Frame(self.root)
+        self.form_container.pack(side=tk.TOP, fill=tk.X)
 
         # Фрейм выбора конфига
         config_frame = ttk.LabelFrame(
-            scrollable_frame, text="Load Default Crystal", padding=10
+            self.form_container, text="Load Default Crystal", padding=10
         )
         config_frame.pack(fill="x", padx=10, pady=5)
+        config_frame.columnconfigure(1, weight=1)
 
         ttk.Label(config_frame, text="Select config:").grid(
             row=0, column=0, sticky="e", padx=5, pady=2
         )
-        self.config_combo = ttk.Combobox(config_frame, state="readonly", width=30)
-        self.config_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
+        self.config_combo = ttk.Combobox(config_frame, state="readonly")
+        self.config_combo.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
         self.config_combo.bind("<<ComboboxSelected>>", self.on_config_select)
 
         ttk.Button(
@@ -119,16 +128,17 @@ class PowderPatternGUI:
 
         # Кристаллографические параметры
         crystal_frame = ttk.LabelFrame(
-            scrollable_frame, text="Crystal Parameters", padding=10
+            self.form_container, text="Crystal Parameters", padding=10
         )
         crystal_frame.pack(fill="x", padx=10, pady=5)
+        crystal_frame.columnconfigure(1, weight=1)
 
         row = 0
         ttk.Label(crystal_frame, text="Name:").grid(
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(crystal_frame, textvariable=self.name_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
@@ -136,7 +146,7 @@ class PowderPatternGUI:
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(crystal_frame, textvariable=self.a_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
@@ -144,7 +154,7 @@ class PowderPatternGUI:
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(crystal_frame, textvariable=self.b_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
@@ -152,7 +162,7 @@ class PowderPatternGUI:
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(crystal_frame, textvariable=self.c_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
@@ -160,7 +170,7 @@ class PowderPatternGUI:
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(crystal_frame, textvariable=self.alpha_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
@@ -168,7 +178,7 @@ class PowderPatternGUI:
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(crystal_frame, textvariable=self.beta_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
@@ -176,7 +186,7 @@ class PowderPatternGUI:
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(crystal_frame, textvariable=self.gamma_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
@@ -184,12 +194,12 @@ class PowderPatternGUI:
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(crystal_frame, textvariable=self.space_group_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
         # Таблица атомов
-        atoms_frame = ttk.LabelFrame(scrollable_frame, text="Atoms", padding=10)
+        atoms_frame = ttk.LabelFrame(self.form_container, text="Atoms", padding=10)
         atoms_frame.pack(fill="x", padx=10, pady=5)
         self.atoms_frame = atoms_frame
 
@@ -213,16 +223,17 @@ class PowderPatternGUI:
 
         # Параметры дифракции
         pattern_frame = ttk.LabelFrame(
-            scrollable_frame, text="Pattern Parameters", padding=10
+            self.form_container, text="Pattern Parameters", padding=10
         )
         pattern_frame.pack(fill="x", padx=10, pady=5)
+        pattern_frame.columnconfigure(1, weight=1)
 
         row = 0
         ttk.Label(pattern_frame, text="Wavelength (Å):").grid(
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(pattern_frame, textvariable=self.wavelength_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
@@ -230,7 +241,7 @@ class PowderPatternGUI:
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         range_frame = ttk.Frame(pattern_frame)
-        range_frame.grid(row=row, column=1, sticky="w", padx=5, pady=2)
+        range_frame.grid(row=row, column=1, sticky="ew", padx=5, pady=2)
         ttk.Entry(range_frame, textvariable=self.tth_start_var, width=8).pack(
             side=tk.LEFT
         )
@@ -248,7 +259,7 @@ class PowderPatternGUI:
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(pattern_frame, textvariable=self.U_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
@@ -256,7 +267,7 @@ class PowderPatternGUI:
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(pattern_frame, textvariable=self.V_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
@@ -264,7 +275,7 @@ class PowderPatternGUI:
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(pattern_frame, textvariable=self.W_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
@@ -272,7 +283,7 @@ class PowderPatternGUI:
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(pattern_frame, textvariable=self.scale_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
@@ -284,14 +295,14 @@ class PowderPatternGUI:
             textvariable=self.profile_var,
             values=["stick", "gaussian", "lorentzian", "pseudo-voigt"],
         )
-        profile_combo.grid(row=row, column=1, sticky="w", padx=5, pady=2)
+        profile_combo.grid(row=row, column=1, sticky="ew", padx=5, pady=2)
         row += 1
 
         ttk.Label(pattern_frame, text="Eta (for pseudo-voigt):").grid(
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(pattern_frame, textvariable=self.eta_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
@@ -299,7 +310,7 @@ class PowderPatternGUI:
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(pattern_frame, textvariable=self.intensity_units_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
@@ -315,12 +326,28 @@ class PowderPatternGUI:
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(pattern_frame, textvariable=self.intensity_max_value_var).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
+            row=row, column=1, sticky="ew", padx=5, pady=2
+        )
+        row += 1
+
+        ttk.Label(pattern_frame, text="θm (deg, polarization):").grid(
+            row=row, column=0, sticky="e", padx=5, pady=2
+        )
+        ttk.Entry(pattern_frame, textvariable=self.thetam_deg_var).grid(
+            row=row, column=1, sticky="ew", padx=5, pady=2
+        )
+        row += 1
+
+        ttk.Label(pattern_frame, text="Intensity cutoff (min):").grid(
+            row=row, column=0, sticky="e", padx=5, pady=2
+        )
+        ttk.Entry(pattern_frame, textvariable=self.intensity_min_var).grid(
+            row=row, column=1, sticky="ew", padx=5, pady=2
         )
         row += 1
 
         ttk.Button(
-            scrollable_frame, text="Generate Pattern", command=self.generate_pattern
+            self.form_container, text="Generate Pattern", command=self.generate_pattern
         ).pack(pady=10)
 
     def scan_config_files(self):
@@ -441,7 +468,7 @@ class PowderPatternGUI:
             self.beta_var.set(float(config["beta"]))
         if "gamma" in config:
             self.gamma_var.set(float(config["gamma"]))
-        if "space_group" in config:
+        if "space_group" in config and config["space_group"] is not None:
             self.space_group_var.set(int(config["space_group"]))
 
         if "atoms" in config and isinstance(config["atoms"], list):
@@ -491,6 +518,10 @@ class PowderPatternGUI:
             self.normalize_intensity_var.set(bool(config["normalize_intensity"]))
         if "intensity_max_value" in config:
             self.intensity_max_value_var.set(float(config["intensity_max_value"]))
+        if "thetam_deg" in config:
+            self.thetam_deg_var.set(float(config["thetam_deg"]))
+        if "intensity_min" in config:
+            self.intensity_min_var.set(float(config["intensity_min"]))
 
     def refresh_atoms_table(self, parent_frame):
         for widgets in self.atom_widgets:
@@ -597,21 +628,25 @@ class PowderPatternGUI:
                 self.alpha_var.get(),
                 self.beta_var.get(),
                 self.gamma_var.get(),
-                self.space_group_var.get(),
-                atom_objects,
+                asf=self.asf,
+                spacegroup_number=self.space_group_var.get(),
+                atoms=atom_objects,
             )
 
-            tth_range = [
-                self.tth_start_var.get(),
-                self.tth_end_var.get(),
-                self.tth_step_var.get(),
-            ]
+            tth_range = np.array(
+                [
+                    self.tth_start_var.get(),
+                    self.tth_end_var.get(),
+                    self.tth_step_var.get(),
+                ]
+            )
 
             pattern = PowderPattern(
                 self.name_var.get(),
                 crystal,
                 self.wavelength_var.get(),
                 tth_range,
+                thetam_deg=self.thetam_deg_var.get(),
                 U=self.U_var.get(),
                 V=self.V_var.get(),
                 W=self.W_var.get(),
@@ -621,8 +656,10 @@ class PowderPatternGUI:
                 intensity_units=self.intensity_units_var.get(),
                 normalize_intensity=self.normalize_intensity_var.get(),
                 intensity_max_value=self.intensity_max_value_var.get(),
+                intensity_min=self.intensity_min_var.get(),
             )
 
+            os.makedirs("images", exist_ok=True)
             crystal.save_image(f"images/{pattern.name}.png")
 
             x, y = pattern.get_pattern_data()

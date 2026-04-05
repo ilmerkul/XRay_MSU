@@ -5,7 +5,7 @@ from src.model.crystal.crystal import Crystal
 from src.model.pattern.plot import Plot
 from src.model.pattern.powder import PowderPattern
 
-cfg = OmegaConf.load("config/test1.yaml")
+cfg = OmegaConf.load("config/alpha-Fe_structure.yaml")
 
 asf = AtomicScatteringFactor("data/f0_WaasKirf.dat")
 
@@ -36,6 +36,7 @@ pattern = PowderPattern(
     intensity_units=cfg.intensity_units,
     normalize_intensity=cfg.normalize_intensity,
     intensity_max_value=cfg.intensity_max_value,
+    intensity_min=cfg.intensity_min,
 )
 
 plot = Plot(powder=pattern)

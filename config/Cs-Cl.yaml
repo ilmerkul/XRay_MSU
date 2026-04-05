@@ -1,15 +1,16 @@
-name: "alpha-Fe"
-a: 2.866
-b: 2.866
-c: 2.866
+name: "Cs-Cl"
+a: 4.123
+b: 4.123
+c: 4.123
 alpha: 90
 beta: 90
 gamma: 90
-space_group: 529
+space_group: null
 atoms: [
-  ["Fe", 0.0, 0.0, 0.0, 1.0, 0.4]
+  ["Cs", 0.0, 0.0, 0.0, 1.0, 0.5],
+  ["Cl", 0.5, 0.5, 0.5, 1.0, 0.5]
 ]
-wavelength: 0.71
+wavelength: 1.54
 twotheta_range: [20, 100, 0.02]
 thetam_deg: 0.
 U: 0.01
