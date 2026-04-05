@@ -44,6 +44,7 @@ help: ## Показать цели
 	@echo "  make dist-cli  — CLI: Windows → xray-msu-cli.exe; иначе бинарник без .exe"
 	@echo "  make dist-win / dist-win-gui / dist-win-cli — только Windows: .exe через PowerShell"
 	@echo "  make clean-dist — удалить build/ и dist/"
+	@echo "  Релиз на GitHub: git tag -a v0.1.0 -m msg && git push origin v0.1.0 → workflow release.yml прикрепит exe + linux .tar.gz"
 	@echo "  Ubuntu/Linux:   ./packaging/build-ubuntu.sh или make dist / dist-gui / dist-cli"
 	@echo ""
 	@echo "Переменные: PYTHON=$(PYTHON)  (если без uv, активируйте venv с зависимостями)"

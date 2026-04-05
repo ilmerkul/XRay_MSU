@@ -2,6 +2,7 @@
 name: build-binaries
 
 on:
+  workflow_call:
   workflow_dispatch:
   push:
     branches: [main]
@@ -16,6 +17,7 @@ on:
       - "uv.lock"
       - "Makefile"
       - ".github/workflows/build-binaries.yml"
+      - ".github/workflows/release.yml"
 
 jobs:
   windows:
