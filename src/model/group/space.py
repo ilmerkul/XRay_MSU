@@ -99,7 +99,7 @@ class SpaceGroup:
         generators = list(zip(rotations, translations))
         return SpaceGroup(generators)
 
-    def generate_space_group(self, mod_lattice=False, tol=1e-8, max_elements=100):
+    def generate_space_group(self, mod_lattice=False, tol=1e-8, max_elements=512):
         if not self.generators:
             dim = 3
         else:

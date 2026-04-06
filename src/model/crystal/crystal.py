@@ -5,6 +5,7 @@ import numpy as np
 
 from ..atom.atom import Atom, AtomicScatteringFactor
 from ..group.space import SpaceGroup
+from .utils import canonical_frac, frac_periodic_allclose
 
 default_colors = {
     "H": "white",
@@ -201,23 +202,22 @@ class Crystal:
         )
         self.Gstar = np.linalg.inv(self.G)
 
-    def _generate_full_atoms(
-        self, symprec: float = 1e-5, to_unit_cell: bool = False
-    ) -> List[Atom]:
+    def _generate_full_atoms(self, symprec: float = 1e-5) -> List[Atom]:
         full_atoms = []
 
         for atom in self.atoms:
-            positions = self.spacegroup.apply(atom.frac, mod_lattice=not to_unit_cell)
-            for pos in positions:
-                new_frac = pos
-
-                if to_unit_cell:
-                    new_frac = np.mod(new_frac, 1.0)
+            # Только кристаллографические операции (не lattice_operations):
+            # иначе дублируются эквивалентные точки и ломается F(hkl).
+            for R, t in self.spacegroup.operations:
+                pos = np.asarray(R, dtype=float) @ np.asarray(
+                    atom.frac, dtype=float
+                ) + np.asarray(t, dtype=float)
+                new_frac = canonical_frac(pos, symprec)
 
                 duplicate = False
                 for existing in full_atoms:
-                    if existing.element == atom.element and np.allclose(
-                        existing.frac, new_frac, atol=symprec
+                    if existing.element == atom.element and frac_periodic_allclose(
+                        new_frac, existing.frac, atol=symprec
                     ):
                         duplicate = True
                         break
@@ -225,9 +225,9 @@ class Crystal:
                 if not duplicate:
                     new_atom = Atom(
                         element=atom.element,
-                        x=new_frac[0],
-                        y=new_frac[1],
-                        z=new_frac[2],
+                        x=float(new_frac[0]),
+                        y=float(new_frac[1]),
+                        z=float(new_frac[2]),
                         occ=atom.occ,
                         Biso=atom.Biso,
                     )
@@ -324,7 +324,7 @@ class Crystal:
         ax = fig.add_subplot(111, projection="3d")
 
         lattice = self._lattice_matrix
-        full_atoms = self._generate_full_atoms(to_unit_cell=True)
+        full_atoms = self._generate_full_atoms()
         for atom in full_atoms:
             cart = np.dot(atom.frac, lattice)
             color = colors.get(atom.element, "gray")

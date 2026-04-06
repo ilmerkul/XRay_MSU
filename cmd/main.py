@@ -18,9 +18,11 @@ from src.model.pattern.plot import Plot
 from src.model.pattern.powder import PowderPattern
 from src.runtime_layout import resource_path
 
-_cfg = resource_path("config", "alpha-Fe_structure.yaml")
+_default_cfg = "config/alpha-Fe_structure.yaml"
+_cfg_arg = sys.argv[1] if len(sys.argv) > 1 else _default_cfg
+_cfg = resource_path("config", Path(_cfg_arg).name)
 if not _cfg:
-    _cfg = str(Path.cwd() / "config" / "alpha-Fe_structure.yaml")
+    _cfg = str(Path.cwd() / _cfg_arg)
 cfg = OmegaConf.load(_cfg)
 
 _asf = resource_path("data", "f0_WaasKirf.dat")
@@ -55,7 +57,7 @@ pattern = PowderPattern(
     intensity_units=cfg.intensity_units,
     normalize_intensity=cfg.normalize_intensity,
     intensity_max_value=cfg.intensity_max_value,
-    intensity_min=cfg.intensity_min,
+    intensity_min=float(cfg.get("intensity_min", 1e-6)),
     multiplicity_mode=cfg.get("multiplicity_mode", "symmetry"),
     multiplicity_metric_rtol=float(cfg.get("multiplicity_metric_rtol", 1e-7)),
     multiplicity_metric_atol=float(cfg.get("multiplicity_metric_atol", 1e-12)),

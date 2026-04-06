@@ -19,6 +19,19 @@ from .utils import (
 )
 
 
+def _format_F_tsv(F: complex, eps: float = 1e-9) -> str:
+    """Строка для TSV: при F≈0 — «0», иначе компактно без -0.000j."""
+    z = complex(F)
+    if abs(z) < eps:
+        return "0"
+    r, i = z.real, z.imag
+    if abs(i) < eps:
+        return f"{r:.3f}"
+    if abs(r) < eps:
+        return f"{i:.3f}j"
+    return f"{r:.3f}{i:+.3f}j"
+
+
 class PowderPattern:
     def __init__(
         self,
@@ -205,7 +218,7 @@ class PowderPattern:
                         f"{l:.3f}",
                         f"{p:.3f}",
                         f"{lp:.3f}",
-                        f"{F:.3f}",
+                        _format_F_tsv(F),
                         f"{intensity:.3f}",
                     ]
                 )

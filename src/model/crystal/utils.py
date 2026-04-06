@@ -1,5 +1,24 @@
 import math
 
+import numpy as np
+
+
+def canonical_frac(x, symprec: float = 1e-5) -> np.ndarray:
+    """Дробные координаты в [0, 1); границы при symprec схлопываются в 0."""
+    x = np.mod(np.asarray(x, dtype=float), 1.0)
+    x = np.where(x < symprec, 0.0, x)
+    x = np.where(x > 1.0 - symprec, 0.0, x)
+    return x
+
+
+def frac_periodic_allclose(a, b, atol: float = 1e-5) -> bool:
+    """Сравнение дробных координат с периодом 1 (0 и 1 — одна точка)."""
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    d = np.abs(a - b)
+    d = np.minimum(d, 1.0 - d)
+    return bool(np.all(d < atol))
+
 
 def generate_hkl_by_layer(n, include_zero=False):
     result = []
