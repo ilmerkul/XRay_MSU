@@ -13,6 +13,7 @@ from matplotlib.figure import Figure
 
 from .model.atom.atom import Atom, AtomicScatteringFactor
 from .model.crystal.crystal import Crystal
+from .model.crystal.utils import expand_atoms_bravais_centering
 from .model.pattern.plot import Plot
 from .model.pattern.powder import PowderPattern
 from .runtime_layout import resource_path
@@ -38,11 +39,19 @@ class PowderPatternGUI:
         self.alpha_var = tk.DoubleVar(value=90.0)
         self.beta_var = tk.DoubleVar(value=90.0)
         self.gamma_var = tk.DoubleVar(value=90.0)
-        self.space_group_var = tk.IntVar(value=225)
+        self.space_group_var = tk.StringVar(value="null")
+        # P/I/F/C/A/B — развёртка по центрированию (дроби ячейки) при Hall пусто
+        self.bravais_centering_var = tk.StringVar(value="none")
 
         self.atoms = [
             {"element": "Na", "x": 0.0, "y": 0.0, "z": 0.0, "occ": 1.0, "biso": 1.6},
+            {"element": "Na", "x": 0.0, "y": 0.5, "z": 0.5, "occ": 1.0, "biso": 1.6},
+            {"element": "Na", "x": 0.5, "y": 0.0, "z": 0.5, "occ": 1.0, "biso": 1.6},
+            {"element": "Na", "x": 0.5, "y": 0.5, "z": 0.0, "occ": 1.0, "biso": 1.6},
             {"element": "Cl", "x": 0.5, "y": 0.5, "z": 0.5, "occ": 1.0, "biso": 1.35},
+            {"element": "Cl", "x": 0.5, "y": 0.0, "z": 0.0, "occ": 1.0, "biso": 1.35},
+            {"element": "Cl", "x": 0.0, "y": 0.5, "z": 0.0, "occ": 1.0, "biso": 1.35},
+            {"element": "Cl", "x": 0.0, "y": 0.0, "z": 0.5, "occ": 1.0, "biso": 1.35},
         ]
 
         self.wavelength_var = tk.DoubleVar(value=1.5418)
@@ -60,8 +69,8 @@ class PowderPatternGUI:
         self.normalize_intensity_var = tk.BooleanVar(value=True)
         self.intensity_max_value_var = tk.DoubleVar(value=100.0)
         self.thetam_deg_var = tk.DoubleVar(value=0.0)
-        self.intensity_min_var = tk.DoubleVar(value=1e-6)
-        self.multiplicity_mode_var = tk.StringVar(value="symmetry")
+        self.intensity_min_var = tk.StringVar(value="1e-6")
+        self.multiplicity_mode_var = tk.StringVar(value="metric")
         self.multiplicity_metric_rtol_var = tk.DoubleVar(value=1e-7)
         self.multiplicity_metric_atol_var = tk.DoubleVar(value=1e-12)
 
@@ -73,12 +82,6 @@ class PowderPatternGUI:
 
         self.create_widgets()
         self.scan_config_files()
-
-        fig_w = max(6.0, min(16.0, (sw - 80) / 100))
-        self.figure = Figure(figsize=(fig_w, 4.5), dpi=100)
-        self.ax = self.figure.add_subplot(111)
-        self.canvas = FigureCanvasTkAgg(self.figure, master=self.root)
-        self.canvas.get_tk_widget().pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
 
     def find_config_dir(self):
         rp = resource_path("config")
@@ -109,8 +112,54 @@ class PowderPatternGUI:
         return os.path.join(script_dir, "data", "f0_WaasKirf.dat")
 
     def create_widgets(self):
-        self.form_container = ttk.Frame(self.root)
-        self.form_container.pack(side=tk.TOP, fill=tk.X)
+        # tk.PanedWindow: есть minsize/paneconfigure; ttk.Panedwindow — другой API
+        main_paned = tk.PanedWindow(self.root, orient=tk.VERTICAL)
+        main_paned.pack(fill=tk.BOTH, expand=True)
+        self._main_paned = main_paned
+
+        scroll_outer = ttk.Frame(main_paned)
+        plot_outer = ttk.Frame(main_paned)
+        main_paned.add(scroll_outer, stretch="always")
+        main_paned.add(plot_outer, stretch="always", minsize=280)
+
+        scroll_canvas = tk.Canvas(scroll_outer, highlightthickness=0)
+        vsb = ttk.Scrollbar(
+            scroll_outer, orient="vertical", command=scroll_canvas.yview
+        )
+        scroll_canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        scroll_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self._scroll_canvas = scroll_canvas
+
+        self.form_container = ttk.Frame(scroll_canvas)
+        inner_win = scroll_canvas.create_window(
+            (0, 0), window=self.form_container, anchor="nw"
+        )
+
+        def _on_inner_configure(_event=None):
+            scroll_canvas.configure(scrollregion=scroll_canvas.bbox("all"))
+
+        def _on_scroll_canvas_configure(event):
+            scroll_canvas.itemconfigure(inner_win, width=event.width)
+
+        self.form_container.bind("<Configure>", _on_inner_configure)
+
+        scroll_canvas.bind("<Configure>", _on_scroll_canvas_configure)
+
+        def _on_mousewheel(event):
+            if getattr(event, "num", None) == 4:
+                scroll_canvas.yview_scroll(-1, "units")
+            elif getattr(event, "num", None) == 5:
+                scroll_canvas.yview_scroll(1, "units")
+            elif getattr(event, "delta", 0):
+                scroll_canvas.yview_scroll(int(-event.delta / 120), "units")
+
+        scroll_canvas.bind("<MouseWheel>", _on_mousewheel)
+        scroll_canvas.bind("<Button-4>", _on_mousewheel)
+        scroll_canvas.bind("<Button-5>", _on_mousewheel)
+        self.form_container.bind("<MouseWheel>", _on_mousewheel)
+        self.form_container.bind("<Button-4>", _on_mousewheel)
+        self.form_container.bind("<Button-5>", _on_mousewheel)
 
         # Фрейм выбора конфига
         config_frame = ttk.LabelFrame(
@@ -194,12 +243,31 @@ class PowderPatternGUI:
         )
         row += 1
 
-        ttk.Label(crystal_frame, text="Space Group:").grid(
+        ttk.Label(crystal_frame, text="Space group (Hall, пусто=auto):").grid(
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(crystal_frame, textvariable=self.space_group_var).grid(
             row=row, column=1, sticky="ew", padx=5, pady=2
         )
+        row += 1
+
+        ttk.Label(
+            crystal_frame,
+            text="Центрир. Bravais (если Hall пусто):",
+        ).grid(row=row, column=0, sticky="e", padx=5, pady=2)
+        bravais_combo = ttk.Combobox(
+            crystal_frame,
+            textvariable=self.bravais_centering_var,
+            values=["none", "P", "I", "F", "C", "A", "B"],
+            state="readonly",
+            width=8,
+        )
+        bravais_combo.grid(row=row, column=1, sticky="w", padx=5, pady=2)
+        ttk.Label(
+            crystal_frame,
+            text="α≈β≈γ≈90°: P/I/F/C/A/B в долях a,b,c",
+            font=("TkDefaultFont", 8),
+        ).grid(row=row, column=2, sticky="w", padx=4, pady=2)
         row += 1
 
         # Таблица атомов
@@ -368,17 +436,37 @@ class PowderPatternGUI:
         )
         mult_tol = ttk.Frame(pattern_frame)
         mult_tol.grid(row=row, column=1, sticky="ew", padx=5, pady=2)
-        ttk.Entry(mult_tol, textvariable=self.multiplicity_metric_rtol_var, width=12).pack(
-            side=tk.LEFT
-        )
-        ttk.Entry(mult_tol, textvariable=self.multiplicity_metric_atol_var, width=12).pack(
-            side=tk.LEFT, padx=(8, 0)
-        )
+        ttk.Entry(
+            mult_tol, textvariable=self.multiplicity_metric_rtol_var, width=12
+        ).pack(side=tk.LEFT)
+        ttk.Entry(
+            mult_tol, textvariable=self.multiplicity_metric_atol_var, width=12
+        ).pack(side=tk.LEFT, padx=(8, 0))
         row += 1
 
         ttk.Button(
             self.form_container, text="Generate Pattern", command=self.generate_pattern
         ).pack(pady=10)
+
+        sh = self.root.winfo_screenheight()
+        sw = self.root.winfo_screenwidth()
+        fig_w = max(6.0, min(16.0, (sw - 80) / 100))
+        fig_h = max(5.5, min(9.0, (sh - 220) / 100))
+        self.figure = Figure(figsize=(fig_w, fig_h), dpi=100)
+        self.ax = self.figure.add_subplot(111)
+        self.canvas = FigureCanvasTkAgg(self.figure, master=plot_outer)
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+        self.root.after_idle(self._set_initial_sash)
+
+    def _set_initial_sash(self):
+        try:
+            self._main_paned.update_idletasks()
+            h = self._main_paned.winfo_height()
+            if h > 120:
+                self._main_paned.sashpos(0, min(int(h * 0.40), 650))
+        except (tk.TclError, AttributeError):
+            pass
 
     def scan_config_files(self):
         self.config_files.clear()
@@ -494,8 +582,11 @@ class PowderPatternGUI:
             self.beta_var.set(float(config["beta"]))
         if "gamma" in config:
             self.gamma_var.set(float(config["gamma"]))
-        if "space_group" in config and config["space_group"] is not None:
-            self.space_group_var.set(int(config["space_group"]))
+        if "space_group" in config:
+            if config["space_group"] is None:
+                self.space_group_var.set("")
+            else:
+                self.space_group_var.set(str(int(config["space_group"])))
 
         if "atoms" in config and isinstance(config["atoms"], list):
             new_atoms = []
@@ -546,8 +637,10 @@ class PowderPatternGUI:
             self.intensity_max_value_var.set(float(config["intensity_max_value"]))
         if "thetam_deg" in config:
             self.thetam_deg_var.set(float(config["thetam_deg"]))
-        if "intensity_min" in config:
-            self.intensity_min_var.set(float(config["intensity_min"]))
+        if "intensity_min" in config and config["intensity_min"] is not None:
+            self.intensity_min_var.set(str(float(config["intensity_min"])))
+        else:
+            self.intensity_min_var.set("1e-6")
         if "multiplicity_mode" in config:
             self.multiplicity_mode_var.set(str(config["multiplicity_mode"]).lower())
         if "multiplicity_metric_rtol" in config:
@@ -558,6 +651,34 @@ class PowderPatternGUI:
             self.multiplicity_metric_atol_var.set(
                 float(config["multiplicity_metric_atol"])
             )
+        _bravais_map = {
+            "none": "none",
+            "p": "P",
+            "i": "I",
+            "f": "F",
+            "c": "C",
+            "a": "A",
+            "b": "B",
+        }
+        key = None
+        if "bravais_centering" in config and config["bravais_centering"] is not None:
+            key = "bravais_centering"
+        elif "cubic_bravais" in config and config["cubic_bravais"] is not None:
+            key = "cubic_bravais"
+        if key is not None:
+            v = str(config[key]).strip().lower()
+            self.bravais_centering_var.set(_bravais_map.get(v, "none"))
+        else:
+            self.bravais_centering_var.set("none")
+
+    def _is_orthogonal_cell_approx(self, atol_deg=0.5) -> bool:
+        """α≈β≈γ≈90° — в такой базе задаются стандартные дробные сдвиги I/F/C/A/B."""
+        al, be, ga = self.alpha_var.get(), self.beta_var.get(), self.gamma_var.get()
+        return (
+            abs(al - 90.0) < atol_deg
+            and abs(be - 90.0) < atol_deg
+            and abs(ga - 90.0) < atol_deg
+        )
 
     def refresh_atoms_table(self, parent_frame):
         for widgets in self.atom_widgets:
@@ -657,6 +778,32 @@ class PowderPatternGUI:
                 for atom in atoms_data
             ]
 
+            sg_text = self.space_group_var.get().strip()
+            if sg_text == "" or sg_text.lower() in ("auto", "null", "none"):
+                spacegroup_number = None
+            else:
+                try:
+                    spacegroup_number = int(sg_text)
+                except ValueError:
+                    messagebox.showerror(
+                        "Input Error",
+                        f"Invalid space group (Hall number or empty for auto): {sg_text!r}",
+                    )
+                    return
+
+            bravais = self.bravais_centering_var.get().strip().lower()
+            if spacegroup_number is None and bravais not in ("", "none"):
+                if not self._is_orthogonal_cell_approx():
+                    messagebox.showwarning(
+                        "Ортогональная ячейка",
+                        "Развёртка P/I/F/C/A/B задаётся в дробях по базису при α≈β≈γ≈90° "
+                        "(куб, тетрагон, орторомб и т.п.). Атомы не разворачиваются.",
+                    )
+                else:
+                    atom_objects = expand_atoms_bravais_centering(
+                        atom_objects, bravais.upper()
+                    )
+
             crystal = Crystal(
                 self.a_var.get(),
                 self.b_var.get(),
@@ -665,7 +812,7 @@ class PowderPatternGUI:
                 self.beta_var.get(),
                 self.gamma_var.get(),
                 asf=self.asf,
-                spacegroup_number=self.space_group_var.get(),
+                spacegroup_number=spacegroup_number,
                 atoms=atom_objects,
             )
 
@@ -676,6 +823,15 @@ class PowderPatternGUI:
                     self.tth_step_var.get(),
                 ]
             )
+
+            try:
+                intensity_min = float(self.intensity_min_var.get().strip())
+            except ValueError:
+                messagebox.showerror(
+                    "Input Error",
+                    f"Invalid intensity cutoff (min): {self.intensity_min_var.get()!r}",
+                )
+                return
 
             pattern = PowderPattern(
                 self.name_var.get(),
@@ -692,7 +848,7 @@ class PowderPatternGUI:
                 intensity_units=self.intensity_units_var.get(),
                 normalize_intensity=self.normalize_intensity_var.get(),
                 intensity_max_value=self.intensity_max_value_var.get(),
-                intensity_min=self.intensity_min_var.get(),
+                intensity_min=intensity_min,
                 multiplicity_mode=self.multiplicity_mode_var.get(),
                 multiplicity_metric_rtol=self.multiplicity_metric_rtol_var.get(),
                 multiplicity_metric_atol=self.multiplicity_metric_atol_var.get(),
@@ -720,6 +876,7 @@ class PowderPatternGUI:
                     ha="center",
                     va="bottom",
                 )
+            self.figure.tight_layout(pad=1.2)
             self.canvas.draw()
             messagebox.showinfo(
                 "Success",

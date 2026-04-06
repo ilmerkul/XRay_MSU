@@ -3,6 +3,7 @@
 Проверка перед PyInstaller GUI: _tkinter должен находить libtcl*/libtk* (ldd без «not found»).
 Иначе frozen-сборка получит скрипты Tcl в _internal, но без .so — ImportError при запуске.
 """
+
 from __future__ import annotations
 
 import re
@@ -14,7 +15,9 @@ def main() -> int:
     try:
         import _tkinter
     except ImportError as e:
-        print("check_linux_tkinter_ldd: не удалось import _tkinter:", e, file=sys.stderr)
+        print(
+            "check_linux_tkinter_ldd: не удалось import _tkinter:", e, file=sys.stderr
+        )
         return 1
 
     so = getattr(_tkinter, "__file__", None)
@@ -24,7 +27,11 @@ def main() -> int:
 
     proc = subprocess.run(["ldd", so], capture_output=True, text=True, timeout=120)
     if proc.returncode != 0:
-        print("check_linux_tkinter_ldd: ldd завершился с кодом", proc.returncode, file=sys.stderr)
+        print(
+            "check_linux_tkinter_ldd: ldd завершился с кодом",
+            proc.returncode,
+            file=sys.stderr,
+        )
         if proc.stderr:
             print(proc.stderr, file=sys.stderr)
         return 1
@@ -76,7 +83,7 @@ def main() -> int:
             file=sys.stderr,
         )
         print(
-            "  3) в pyproject.toml задано [tool.uv] python-preference = \"system\" — после смены Python пересоздайте .venv.",
+            '  3) в pyproject.toml задано [tool.uv] python-preference = "system" — после смены Python пересоздайте .venv.',
             file=sys.stderr,
         )
         print(
@@ -92,7 +99,10 @@ def main() -> int:
     )
     print("  Debian/Ubuntu: apt search libtcl9", file=sys.stderr)
     print("  Fedora/RHEL:    sudo dnf install tcl tk", file=sys.stderr)
-    print("  Проверка:       ldd <путь_к__tkinter__> | grep -E 'tcl|tk'  (без «not found»)", file=sys.stderr)
+    print(
+        "  Проверка:       ldd <путь_к__tkinter__> | grep -E 'tcl|tk'  (без «not found»)",
+        file=sys.stderr,
+    )
     return 1
 
 

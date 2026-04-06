@@ -18,7 +18,7 @@ from src.model.pattern.plot import Plot
 from src.model.pattern.powder import PowderPattern
 from src.runtime_layout import resource_path
 
-_default_cfg = "config/alpha-Fe_structure.yaml"
+_default_cfg = "config/Cu.yaml"
 _cfg_arg = sys.argv[1] if len(sys.argv) > 1 else _default_cfg
 _cfg = resource_path("config", Path(_cfg_arg).name)
 if not _cfg:

@@ -2,6 +2,7 @@
 """
 Точка входа GUI для PyInstaller. Из репозитория: python entry_gui.py или python -m src.
 """
+
 from __future__ import annotations
 
 import os

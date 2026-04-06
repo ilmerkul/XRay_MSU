@@ -2,6 +2,7 @@
 """
 Точка входа CLI для PyInstaller (cmd/main.py). Из репозитория: python cmd/main.py.
 """
+
 from __future__ import annotations
 
 import os

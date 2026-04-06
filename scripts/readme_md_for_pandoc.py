@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Переводит \\(…\\) / \\[…\\] в $…$ / $$…$$ для pandoc → PDF (кириллица + xelatex)."""
+
 import pathlib
 import sys
 
