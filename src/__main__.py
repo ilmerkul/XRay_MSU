@@ -1,6 +1,15 @@
 import glob
 import json
+import locale
 import os
+import sys
+
+# До import tkinter: на Windows с LC_NUMERIC≠C виджеты DoubleVar/ввод часто ломаются (запятая vs точка).
+try:
+    locale.setlocale(locale.LC_NUMERIC, "C")
+except (locale.Error, OSError):
+    pass
+
 import tkinter as tk
 from tkinter import messagebox, ttk
 
@@ -19,6 +28,24 @@ from .model.pattern.powder import PowderPattern
 from .runtime_layout import resource_path
 
 matplotlib.use("TkAgg")
+
+
+def _parse_float_locale(s: str) -> float:
+    """Парсинг числа из полей ввода: запятая как десятичный разделитель (локали Windows)."""
+    t = str(s).strip().replace(",", ".").replace(" ", "")
+    return float(t)
+
+
+def _safe_double_get(var, field_label: str):
+    """DoubleVar.get() при неверном формате даёт TclError (часто на Windows)."""
+    try:
+        return var.get()
+    except tk.TclError:
+        messagebox.showerror(
+            "Input Error",
+            f"Invalid number in {field_label}. Use a dot as decimal separator (e.g. 1.5).",
+        )
+        return None
 
 
 class PowderPatternGUI:
@@ -87,6 +114,11 @@ class PowderPatternGUI:
         rp = resource_path("config")
         if rp and os.path.isdir(rp):
             return rp
+        # PyInstaller onefile: не полагаться только на __file__ (иногда отличается от _MEIPASS).
+        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+            meipass_cfg = os.path.join(sys._MEIPASS, "config")
+            if os.path.isdir(meipass_cfg):
+                return meipass_cfg
         script_dir = os.path.dirname(os.path.abspath(__file__))
         candidate = os.path.join(script_dir, "config")
         if os.path.isdir(candidate):
@@ -101,6 +133,10 @@ class PowderPatternGUI:
         rp = resource_path("data", "f0_WaasKirf.dat")
         if rp and os.path.isfile(rp):
             return rp
+        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+            meipass_dat = os.path.join(sys._MEIPASS, "data", "f0_WaasKirf.dat")
+            if os.path.isfile(meipass_dat):
+                return meipass_dat
         script_dir = os.path.dirname(os.path.abspath(__file__))
         candidate = os.path.join(script_dir, "data", "f0_WaasKirf.dat")
         if os.path.isfile(candidate):
@@ -671,9 +707,9 @@ class PowderPatternGUI:
         else:
             self.bravais_centering_var.set("none")
 
-    def _is_orthogonal_cell_approx(self, atol_deg=0.5) -> bool:
+    @staticmethod
+    def _is_orthogonal_cell_approx_from_values(al, be, ga, atol_deg=0.5) -> bool:
         """α≈β≈γ≈90° — в такой базе задаются стандартные дробные сдвиги I/F/C/A/B."""
-        al, be, ga = self.alpha_var.get(), self.beta_var.get(), self.gamma_var.get()
         return (
             abs(al - 90.0) < atol_deg
             and abs(be - 90.0) < atol_deg
@@ -740,11 +776,11 @@ class PowderPatternGUI:
         for widgets in self.atom_widgets:
             try:
                 element = widgets[0].get()
-                x = float(widgets[1].get())
-                y = float(widgets[2].get())
-                z = float(widgets[3].get())
-                occ = float(widgets[4].get())
-                biso = float(widgets[5].get())
+                x = _parse_float_locale(widgets[1].get())
+                y = _parse_float_locale(widgets[2].get())
+                z = _parse_float_locale(widgets[3].get())
+                occ = _parse_float_locale(widgets[4].get())
+                biso = _parse_float_locale(widgets[5].get())
                 new_atoms.append(
                     {
                         "element": element,
@@ -792,8 +828,18 @@ class PowderPatternGUI:
                     return
 
             bravais = self.bravais_centering_var.get().strip().lower()
+
+            a = _safe_double_get(self.a_var, "a (Å)")
+            b = _safe_double_get(self.b_var, "b (Å)")
+            c = _safe_double_get(self.c_var, "c (Å)")
+            alpha = _safe_double_get(self.alpha_var, "α (deg)")
+            beta = _safe_double_get(self.beta_var, "β (deg)")
+            gamma = _safe_double_get(self.gamma_var, "γ (deg)")
+            if None in (a, b, c, alpha, beta, gamma):
+                return
+
             if spacegroup_number is None and bravais not in ("", "none"):
-                if not self._is_orthogonal_cell_approx():
+                if not self._is_orthogonal_cell_approx_from_values(alpha, beta, gamma):
                     messagebox.showwarning(
                         "Ортогональная ячейка",
                         "Развёртка P/I/F/C/A/B задаётся в дробях по базису при α≈β≈γ≈90° "
@@ -805,27 +851,26 @@ class PowderPatternGUI:
                     )
 
             crystal = Crystal(
-                self.a_var.get(),
-                self.b_var.get(),
-                self.c_var.get(),
-                self.alpha_var.get(),
-                self.beta_var.get(),
-                self.gamma_var.get(),
+                a,
+                b,
+                c,
+                alpha,
+                beta,
+                gamma,
                 asf=self.asf,
                 spacegroup_number=spacegroup_number,
                 atoms=atom_objects,
             )
 
-            tth_range = np.array(
-                [
-                    self.tth_start_var.get(),
-                    self.tth_end_var.get(),
-                    self.tth_step_var.get(),
-                ]
-            )
+            tth_s = _safe_double_get(self.tth_start_var, "2θ start")
+            tth_e = _safe_double_get(self.tth_end_var, "2θ end")
+            tth_step = _safe_double_get(self.tth_step_var, "2θ step")
+            if None in (tth_s, tth_e, tth_step):
+                return
+            tth_range = np.array([tth_s, tth_e, tth_step])
 
             try:
-                intensity_min = float(self.intensity_min_var.get().strip())
+                intensity_min = _parse_float_locale(self.intensity_min_var.get())
             except ValueError:
                 messagebox.showerror(
                     "Input Error",
@@ -833,25 +878,53 @@ class PowderPatternGUI:
                 )
                 return
 
+            wl = _safe_double_get(self.wavelength_var, "wavelength")
+            thetam = _safe_double_get(self.thetam_deg_var, "θ_m")
+            U = _safe_double_get(self.U_var, "U")
+            V = _safe_double_get(self.V_var, "V")
+            W = _safe_double_get(self.W_var, "W")
+            scale = _safe_double_get(self.scale_var, "scale")
+            eta = _safe_double_get(self.eta_var, "η")
+            imax = _safe_double_get(self.intensity_max_value_var, "intensity max")
+            mm_rtol = _safe_double_get(
+                self.multiplicity_metric_rtol_var, "multiplicity rtol"
+            )
+            mm_atol = _safe_double_get(
+                self.multiplicity_metric_atol_var, "multiplicity atol"
+            )
+            if None in (
+                wl,
+                thetam,
+                U,
+                V,
+                W,
+                scale,
+                eta,
+                imax,
+                mm_rtol,
+                mm_atol,
+            ):
+                return
+
             pattern = PowderPattern(
                 self.name_var.get(),
                 crystal,
-                self.wavelength_var.get(),
+                wl,
                 tth_range,
-                thetam_deg=self.thetam_deg_var.get(),
-                U=self.U_var.get(),
-                V=self.V_var.get(),
-                W=self.W_var.get(),
-                scale=self.scale_var.get(),
+                thetam_deg=thetam,
+                U=U,
+                V=V,
+                W=W,
+                scale=scale,
                 profile=self.profile_var.get(),
-                eta=self.eta_var.get(),
+                eta=eta,
                 intensity_units=self.intensity_units_var.get(),
                 normalize_intensity=self.normalize_intensity_var.get(),
-                intensity_max_value=self.intensity_max_value_var.get(),
+                intensity_max_value=imax,
                 intensity_min=intensity_min,
                 multiplicity_mode=self.multiplicity_mode_var.get(),
-                multiplicity_metric_rtol=self.multiplicity_metric_rtol_var.get(),
-                multiplicity_metric_atol=self.multiplicity_metric_atol_var.get(),
+                multiplicity_metric_rtol=mm_rtol,
+                multiplicity_metric_atol=mm_atol,
             )
 
             run_dir = f"runs/{pattern.name}/"
