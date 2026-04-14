@@ -14,7 +14,15 @@ class Atom:
 class AtomicScatteringFactor:
     def __init__(self, filename: str):
         self.data = {}
+        self._normalized_index = {}
         self._parse(filename)
+
+    @staticmethod
+    def _normalize_symbol(symbol: str) -> str:
+        s = str(symbol).strip()
+        if not s:
+            return s
+        return s[:1].upper() + s[1:].lower()
 
     def _parse(self, filename):
         with open(filename, "r") as f:
@@ -41,6 +49,9 @@ class AtomicScatteringFactor:
                             c = float(tokens[5])
                             b = list(map(float, tokens[6:]))
                             self.data[symbol] = (a, b, c)
+                            self._normalized_index[self._normalize_symbol(symbol)] = (
+                                symbol
+                            )
                         break
                     i += 1
                 i += 1
@@ -48,9 +59,23 @@ class AtomicScatteringFactor:
                 i += 1
 
     def get_f0(self, symbol, k):
-        if symbol not in self.data:
-            raise ValueError(f"Символ '{symbol}' не найден в данных.")
-        a, b, c = self.data[symbol]
+        raw_symbol = str(symbol).strip()
+        resolved = None
+        if raw_symbol in self.data:
+            resolved = raw_symbol
+        else:
+            normalized = self._normalize_symbol(raw_symbol)
+            resolved = self._normalized_index.get(normalized)
+            if resolved is None:
+                # Fallback: case-insensitive compare for unexpected symbol variants.
+                raw_low = raw_symbol.lower()
+                for key in self.data:
+                    if key.lower() == raw_low:
+                        resolved = key
+                        break
+        if resolved is None:
+            raise ValueError(f"Символ '{raw_symbol}' не найден в данных.")
+        a, b, c = self.data[resolved]
         k2 = k * k
         result = c
         for i in range(5):
