@@ -1,4 +1,3 @@
-import csv
 import json
 import os
 from typing import Dict
@@ -193,35 +192,102 @@ class PowderPattern:
                 json.dump(refs, f, cls=NumpyEncoder)
 
         with open(
-            f"runs/{self.name}/{self.name}.tsv", "w", newline="", encoding="utf-8"
+            f"runs/{self.name}/{self.name}.txt", "w", newline="", encoding="utf-8"
         ) as f:
-            writer = csv.writer(f, delimiter="\t")
-            writer.writerow(list(refs[0].keys()))
-
-            for ref in refs[::-1]:
-                hkl = ref["hkl"]
-                d = ref["d"]
-                twotheta = ref["twotheta"]
-                mult = ref["mult"]
-                l = ref["l"]
-                p = ref["p"]
-                lp = ref["lp"]
-                F = ref["F"]
-                intensity = ref["intensity"]
-
-                writer.writerow(
-                    [
-                        f"{hkl[0]} {hkl[1]} {hkl[2]}",
-                        f"{d:.3f}",
-                        f"{twotheta:.3f}",
-                        mult,
-                        f"{l:.3f}",
-                        f"{p:.3f}",
-                        f"{lp:.3f}",
-                        _format_F_tsv(F),
-                        f"{intensity:.3f}",
-                    ]
+            crystal = self.crystal
+            f.write("# Crystal metadata\n")
+            f.write(f"# name: {self.name}\n")
+            f.write(
+                "# cell: "
+                f"a={crystal.a:.6f}, b={crystal.b:.6f}, c={crystal.c:.6f}, "
+                f"alpha={np.degrees(crystal.alpha):.6f}, "
+                f"beta={np.degrees(crystal.beta):.6f}, "
+                f"gamma={np.degrees(crystal.gamma):.6f}\n"
+            )
+            f.write(f"# volume: {crystal.V:.6f}\n")
+            f.write(
+                f"# wavelength: {self.wavelength:.6f} A; "
+                f"twotheta_range: [{self.twotheta[0]:.6f}, {self.twotheta[-1]:.6f}] "
+                f"step={self.twotheta[1] - self.twotheta[0]:.6f}\n"
+            )
+            f.write(
+                f"# profile: {self.profile}; eta={self.eta}; "
+                f"thetam_deg={self.thetam_deg}\n"
+            )
+            f.write(
+                f"# caglioti: U={self.U}, V={self.V}, W={self.W}; "
+                f"scale={self.scale}\n"
+            )
+            f.write(
+                f"# intensity: units={self.intensity_units}, "
+                f"normalized={self.normalize_intensity}, "
+                f"intensity_max_value={self.intensity_max_value}, "
+                f"intensity_min={self.intensity_min}\n"
+            )
+            f.write(
+                f"# multiplicity_mode: {self.multiplicity_mode}; "
+                f"metric_rtol={self.multiplicity_metric_rtol}, "
+                f"metric_atol={self.multiplicity_metric_atol}\n"
+            )
+            f.write(
+                f"# spacegroup_ops: {len(crystal.spacegroup.operations)}; "
+                f"atoms_input={len(crystal.atoms)}; atoms_full={len(crystal.full_atoms)}\n"
+            )
+            f.write("# atoms (element, x, y, z, occ, Biso)\n")
+            for atom in crystal.atoms:
+                x, y, z = atom.frac
+                f.write(
+                    f"#   {atom.element}, {x:.6f}, {y:.6f}, {z:.6f}, "
+                    f"{atom.occ:.6f}, {atom.Biso:.6f}\n"
                 )
+            f.write("#\n")
+
+            # Фиксированная ширина в текстовой таблице: удобно читать глазами.
+            cols = [
+                ("n", 4, "right"),
+                ("hkl", 9, "left"),
+                ("d", 9, "right"),
+                ("twotheta", 10, "right"),
+                ("mult", 6, "right"),
+                ("l", 9, "right"),
+                ("p", 9, "right"),
+                ("F", 14, "right"),
+                ("intensity", 11, "right"),
+            ]
+
+            def _fmt(value, width, align):
+                text = str(value)
+                return text.ljust(width) if align == "left" else text.rjust(width)
+
+            def _border():
+                return "+" + "+".join("-" * (width + 2) for _, width, _ in cols) + "+"
+
+            def _row(values):
+                cells = [
+                    _fmt(value, width, align)
+                    for value, (_, width, align) in zip(values, cols)
+                ]
+                return "| " + " | ".join(cells) + " |"
+
+            f.write(_border() + "\n")
+            f.write(_row([name for name, _, _ in cols]) + "\n")
+            f.write(_border() + "\n")
+
+            for i, ref in enumerate(refs[::-1], start=1):
+                hkl = ref["hkl"]
+                row = [
+                    f"{i}",
+                    f"{hkl[0]} {hkl[1]} {hkl[2]}",
+                    f"{ref['d']:.3f}",
+                    f"{ref['twotheta']:.3f}",
+                    f"{ref['mult']}",
+                    f"{ref['l']:.3f}",
+                    f"{ref['p']:.3f}",
+                    _format_F_tsv(ref["F"]),
+                    f"{ref['intensity']:.3f}",
+                ]
+                f.write(_row(row) + "\n")
+            f.write(_border() + "\n")
 
         np.savetxt(f"runs/{self.name}/G.csv", self.crystal.G, delimiter=",")
         np.savetxt(f"runs/{self.name}/Gstar.csv", self.crystal.Gstar, delimiter=",")

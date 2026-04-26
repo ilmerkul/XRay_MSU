@@ -2,7 +2,10 @@ import glob
 import json
 import locale
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 
 # До import tkinter: на Windows с LC_NUMERIC≠C виджеты DoubleVar/ввод часто ломаются (запятая vs точка).
 try:
@@ -112,9 +115,14 @@ class PowderPatternGUI:
             "use_wl2": "Использовать вторую длину волны",
             "generate_pattern": "Рассчитать паттерн",
             "reset_zoom": "Сбросить приближение",
+            "print_pattern": "Печать графика",
             "warning_title": "Предупреждение",
             "error_title": "Ошибка",
             "input_error_title": "Ошибка ввода",
+            "no_pattern_to_print": "Сначала постройте powder pattern.",
+            "printer_not_found": "Не найден доступный механизм печати в системе.",
+            "print_failed": "Не удалось отправить на печать:\n{error}",
+            "print_sent": "График отправлен на печать.",
             "at_least_one_atom": "Нужен хотя бы один атом.",
             "failed_load_config": "Не удалось загрузить конфиг:\n{error}",
             "config_dir_not_found": "Папка с конфигами не найдена: {path}",
@@ -130,7 +138,7 @@ class PowderPatternGUI:
             "plot_title": "Суммарный порошковый паттерн",
             "ratio_on_plot": "\nI(λ2)/I(λ1) = {ratio:g} (на графике)",
             "success_title": "Успех",
-            "success_message": "Рассчитано для длин волн: {wl_msg}{ratio_msg}\nСохранено в {run_dir}: TSV и изображение для первой длины волны.",
+            "success_message": "Рассчитано для длин волн: {wl_msg}{ratio_msg}\nСохранено в {run_dir}: TXT и изображение для первой длины волны.",
         },
         "en": {
             "config_frame": "Load Default Crystal",
@@ -162,9 +170,14 @@ class PowderPatternGUI:
             "use_wl2": "Use second wavelength",
             "generate_pattern": "Generate Pattern",
             "reset_zoom": "Reset Zoom",
+            "print_pattern": "Print pattern",
             "warning_title": "Warning",
             "error_title": "Error",
             "input_error_title": "Input Error",
+            "no_pattern_to_print": "Build a powder pattern first.",
+            "printer_not_found": "No available system print backend was found.",
+            "print_failed": "Failed to print:\n{error}",
+            "print_sent": "Pattern was sent to printer.",
             "at_least_one_atom": "At least one atom required.",
             "failed_load_config": "Failed to load config:\n{error}",
             "config_dir_not_found": "Config directory not found: {path}",
@@ -180,7 +193,7 @@ class PowderPatternGUI:
             "plot_title": "Combined powder pattern",
             "ratio_on_plot": "\nI(λ2)/I(λ1) = {ratio:g} (on plot)",
             "success_title": "Success",
-            "success_message": "Calculated for wavelengths: {wl_msg}{ratio_msg}\nSaved under {run_dir}: TSV and image files for the first wavelength.",
+            "success_message": "Calculated for wavelengths: {wl_msg}{ratio_msg}\nSaved under {run_dir}: TXT and image files for the first wavelength.",
         },
     }
 
@@ -658,6 +671,9 @@ class PowderPatternGUI:
         )
         lang_combo.pack(side=tk.LEFT)
         lang_combo.bind("<<ComboboxSelected>>", self._on_language_selected)
+        ttk.Button(
+            lang_row, text=self.tr("print_pattern"), command=self._print_pattern
+        ).pack(side=tk.LEFT, padx=(12, 0))
 
         sh = self.root.winfo_screenheight()
         sw = self.root.winfo_screenwidth()
@@ -708,6 +724,63 @@ class PowderPatternGUI:
         self.tth_start_var.set(float(self._full_xlim[0]))
         self.tth_end_var.set(float(self._full_xlim[1]))
         self.canvas.draw_idle()
+
+    def _print_pattern(self):
+        if not self.ax.has_data():
+            messagebox.showwarning(
+                self.tr("warning_title"), self.tr("no_pattern_to_print")
+            )
+            return
+
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb", suffix=".png", delete=False
+            ) as tmp:
+                tmp_path = tmp.name
+            self.figure.savefig(tmp_path, dpi=300, bbox_inches="tight")
+            if os.name == "nt":
+                # Windows: используем системный shell-print для зарегистрированного PNG viewer.
+                os.startfile(tmp_path, "print")
+                # Дадим spooler время прочитать файл перед удалением.
+                def _cleanup_tmp(p):
+                    try:
+                        if os.path.exists(p):
+                            os.remove(p)
+                    except OSError:
+                        pass
+
+                self.root.after(120000, lambda p=tmp_path: _cleanup_tmp(p))
+                tmp_path = None
+            elif shutil.which("lp") is not None:
+                subprocess.run(
+                    ["lp", tmp_path], check=True, capture_output=True, text=True
+                )
+            elif shutil.which("lpr") is not None:
+                subprocess.run(
+                    ["lpr", tmp_path], check=True, capture_output=True, text=True
+                )
+            else:
+                messagebox.showwarning(
+                    self.tr("warning_title"), self.tr("printer_not_found")
+                )
+                return
+            messagebox.showinfo(self.tr("success_title"), self.tr("print_sent"))
+        except subprocess.CalledProcessError as e:
+            msg = e.stderr.strip() if e.stderr else str(e)
+            messagebox.showerror(
+                self.tr("error_title"), self.tr("print_failed").format(error=msg)
+            )
+        except Exception as e:
+            messagebox.showerror(
+                self.tr("error_title"), self.tr("print_failed").format(error=str(e))
+            )
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
 
     def _set_initial_sash(self):
         try:
