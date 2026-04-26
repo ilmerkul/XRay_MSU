@@ -40,9 +40,9 @@ class PowderPattern:
         wavelength: float,
         twotheta_range: np.ndarray,
         thetam_deg: float,
-        U: float = 0.01,
-        V: float = -0.01,
-        W: float = 0.005,
+        U: float = 0.0026,
+        V: float = -0.0018,
+        W: float = 0.0010,
         scale: float = 1.0,
         profile: str = "pvoigt",
         eta: float = 0.5,
@@ -265,6 +265,13 @@ class PowderPattern:
                 key < peak_dict[rounded_centre][2]
             ):
                 peak_dict[rounded_centre] = (hkl, intensity, key)
+
+        # Профили с размытием нормированы на единичную площадь → пик ниже, чем у «палочки».
+        # После свёртки снова вписываем максимум в intensity_max_value (как у stick).
+        if self.normalize_intensity and self.profile != "stick":
+            y_max_all = float(np.max(y))
+            if y_max_all > 0:
+                y = y * (self.intensity_max_value / y_max_all)
 
         hkl_labels = []
         for centre, (hkl, _, _) in peak_dict.items():

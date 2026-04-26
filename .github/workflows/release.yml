@@ -39,6 +39,7 @@ jobs:
         with:
           name: xray-msu-windows-exe
           path: dist/*.exe
+          retention-days: 1
 
   linux:
     runs-on: ubuntu-latest
@@ -80,6 +81,7 @@ jobs:
           path: |
             dist/xray-msu-gui/
             dist/xray-msu-cli
+          retention-days: 1
 
   publish:
     needs: [windows, linux]

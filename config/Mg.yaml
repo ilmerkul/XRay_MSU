@@ -1,28 +1,18 @@
+# Гексагональная система: задайте a и c (b=a, α=β=90°, γ=120° подставятся).
 name: "Mg"
+lattice_family: hexagonal
+bravais_centering: none
+space_group: null
+
 a: 3.209
-b: 3.209
 c: 5.211
-alpha: 90
-beta: 90
-gamma: 120
-space_group: 488
+
 atoms: [
-  ["Mg", 0., 0., 0., 1.0, 0.8],
-  ["Mg", 0.3333, 0.6667, 0.5, 1.0, 0.8]
+  ["Mg", 0.0, 0.0, 0.0, 1.0, 0.8],
+  ["Mg", 0.3333, 0.6667, 0.5, 1.0, 0.8],
 ]
+
 wavelength: 1.5418
-twotheta_range: [20, 100, 0.02]
-thetam_deg: 0.
-U: 0.01
-V: -0.005
-W: 0.005
-scale: 1.0
-profile: "stick"
-eta: 0.5
-intensity_units: "arbitrary"
-normalize_intensity: true
-intensity_max_value: 100
-intensity_min: 0.0001
-multiplicity_mode: metric
-multiplicity_metric_rtol: 1.0e-7
-multiplicity_metric_atol: 1.0e-12
+twotheta_range: [5, 150, 0.02]
+profile: stick
+thetam_deg: 0.0

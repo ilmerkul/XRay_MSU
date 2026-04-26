@@ -41,9 +41,11 @@ jobs:
           uv run --group dev pyinstaller packaging/xray-msu-cli.spec --noconfirm
 
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch'
         with:
           name: xray-msu-windows-exe
           path: dist/*.exe
+          retention-days: 1
 
   linux:
     runs-on: ubuntu-latest
@@ -80,8 +82,10 @@ jobs:
           uv run --group dev pyinstaller packaging/xray-msu-cli.spec --noconfirm
 
       - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch'
         with:
           name: xray-msu-linux-binaries
           path: |
             dist/xray-msu-gui/
             dist/xray-msu-cli
+          retention-days: 1

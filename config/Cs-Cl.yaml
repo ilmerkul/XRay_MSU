@@ -1,28 +1,16 @@
 name: "Cs-Cl"
-a: 4.123
-b: 4.123
-c: 4.123
-alpha: 90
-beta: 90
-gamma: 90
+lattice_family: cubic
+bravais_centering: P
 space_group: null
+
+a: 4.123
+
 atoms: [
   ["Cs", 0.0, 0.0, 0.0, 1.0, 0.5],
-  ["Cl", 0.5, 0.5, 0.5, 1.0, 0.5]
+  ["Cl", 0.5, 0.5, 0.5, 1.0, 0.5],
 ]
+
 wavelength: 1.54
-twotheta_range: [20, 100, 0.02]
-thetam_deg: 0.
-U: 0.01
-V: -0.005
-W: 0.005
-scale: 1.0
-profile: "stick"
-eta: 0.5
-intensity_units: "arbitrary"
-normalize_intensity: true
-intensity_max_value: 100
-intensity_min: 0.0001
-multiplicity_mode: metric
-multiplicity_metric_rtol: 1.0e-7
-multiplicity_metric_atol: 1.0e-12
+twotheta_range: [5, 150, 0.02]
+profile: stick
+thetam_deg: 0.0

@@ -25,7 +25,12 @@ IS_WIN := yes
 endif
 endif
 
-.PHONY: help install sync run gui lint format check clean doc-pdf dist dist-gui dist-cli dist-win dist-win-gui dist-win-cli clean-dist
+# Документация → PDF (pandoc + xelatex): переопределите DOC_SRC / DOC_OUT / DOC_TITLE при необходимости
+DOC_SRC ?= doc/README.md
+DOC_OUT ?= doc/README.pdf
+DOC_TITLE ?= XRay_MSU — алгоритм
+
+.PHONY: help install sync run gui lint format check clean doc-pdf doc-pdf-overview doc-pdf-all dist dist-gui dist-cli dist-win dist-win-gui dist-win-cli clean-dist
 
 help: ## Показать цели
 	@echo "XRay_MSU — make-цели (рабочий каталог: $(ROOT))"
@@ -38,7 +43,9 @@ help: ## Показать цели
 	@echo "  make format    — ruff format"
 	@echo "  make check     — lint (без правок)"
 	@echo "  make clean     — удалить __pycache__ и кэш ruff"
-	@echo "  make doc-pdf   — doc/README.md → doc/README.pdf (нужны pandoc, xelatex, DejaVu)"
+	@echo "  make doc-pdf           — DOC_SRC → DOC_OUT (по умолчанию doc/README.md → doc/README.pdf)"
+	@echo "  make doc-pdf-overview  — doc/README-overview.md → doc/README-overview.pdf"
+	@echo "  make doc-pdf-all       — оба PDF (нужны pandoc, xelatex, шрифты DejaVu)"
 	@echo "  make dist      — PyInstaller: GUI + CLI (на Windows — оба .exe через dist-gui/dist-cli)"
 	@echo "  make dist-gui  — GUI: Windows → xray-msu-gui.exe; Linux — onedir + check_linux_tkinter_ldd"
 	@echo "  make dist-cli  — CLI: Windows → xray-msu-cli.exe; иначе бинарник без .exe"
@@ -90,17 +97,26 @@ clean: ## Кэши Python и ruff
 	cd "$(ROOT)" && find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
 	cd "$(ROOT)" && rm -rf .ruff_cache
 
-doc-pdf: ## doc/README.md → doc/README.pdf (pandoc, xelatex, шрифты DejaVu)
-	cd "$(ROOT)" && $(PYTHON) scripts/readme_md_for_pandoc.py doc/README.md > doc/.README_for_pdf.md
-	cd "$(ROOT)" && pandoc doc/.README_for_pdf.md -o doc/README.pdf \
+doc-pdf: ## $(DOC_SRC) → $(DOC_OUT) (pandoc, xelatex, шрифты DejaVu)
+	cd "$(ROOT)" && $(PYTHON) scripts/readme_md_for_pandoc.py "$(DOC_SRC)" > doc/.README_for_pdf.md
+	cd "$(ROOT)" && pandoc doc/.README_for_pdf.md -o "$(DOC_OUT)" \
 		--pdf-engine=xelatex \
 		-V mainfont="DejaVu Serif" \
 		-V sansfont="DejaVu Sans" \
 		-V monofont="DejaVu Sans Mono" \
 		-V geometry:margin=2.5cm \
-		--metadata title="XRay_MSU — алгоритм" \
+		--metadata title="$(DOC_TITLE)" \
 		-N
 	rm -f "$(ROOT)/doc/.README_for_pdf.md"
+
+doc-pdf-overview: ## doc/README-overview.md → doc/README-overview.pdf
+	@$(MAKE) -C "$(ROOT)" doc-pdf \
+		DOC_SRC=doc/README-overview.md \
+		DOC_OUT=doc/README-overview.pdf \
+		DOC_TITLE='XRay_MSU — обзор'
+
+doc-pdf-all: doc-pdf doc-pdf-overview ## Собрать doc/README.pdf и doc/README-overview.pdf
+	@true
 
 dist: dist-gui dist-cli ## Собрать оба бинарника (PyInstaller)
 

@@ -1,27 +1,20 @@
 name: "Cu"
+lattice_family: cubic
+bravais_centering: F
+space_group: null
+
 a: 3.61
-b: 3.61
-c: 3.61
-alpha: 90
-beta: 90
-gamma: 90
-space_group: 523
+
 atoms: [
-  ["Cu", 0.0, 0.0, 0.0, 1.0, 1.28]
+  ["Cu", 0.0, 0.0, 0.0, 1.0, 1.28],
 ]
+
 wavelength: 1.5418
-twotheta_range: [20, 100, 0.02]
-thetam_deg: 0.
-U: 0.01
-V: -0.005
-W: 0.005
-scale: 1.0
-profile: "stick"
-eta: 0.5
-intensity_units: "arbitrary"
-normalize_intensity: true
-intensity_max_value: 100
-multiplicity_mode: metric
-multiplicity_metric_rtol: 1.0e-7
-multiplicity_metric_atol: 1.0e-12
-intensity_min: 0.0001
+twotheta_range: [5, 150, 0.02]
+profile: stick
+thetam_deg: 0.0
+
+# Кальотти: FWHM_θ = sqrt(U tan²θ + V tanθ + W)
+U: 0.0026
+V: -0.0018
+W: 0.0010
