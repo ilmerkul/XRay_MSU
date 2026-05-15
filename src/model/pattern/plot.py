@@ -4,6 +4,7 @@ from typing import Union
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import MultipleLocator
 
 from src.model.crystal.crystal import Crystal
 from src.model.pattern.powder import PowderPattern
@@ -23,6 +24,11 @@ class Plot:
         plt.xlabel("2θ (deg)")
         plt.ylabel("Intensity")
         plt.title(self.powder.name)
+        ax = plt.gca()
+        ax.xaxis.set_major_locator(MultipleLocator(10))
+        ax.xaxis.set_minor_locator(MultipleLocator(1))
+        ax.tick_params(axis="x", which="major", length=6)
+        ax.tick_params(axis="x", which="minor", length=3)
         for hkl, x, y in self.powder.hkl_labels:
             plt.text(x, y, "".join(map(str, hkl)), fontsize=6)
         plt.legend()

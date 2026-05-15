@@ -22,14 +22,19 @@ import numpy as np
 import yaml
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-from matplotlib.ticker import AutoMinorLocator
+from matplotlib.ticker import MultipleLocator
 from matplotlib.widgets import RectangleSelector
 
 from .model.atom.atom import Atom, AtomicScatteringFactor
 from .model.crystal.crystal import Crystal
 from .model.crystal.utils import expand_atoms_bravais_centering
 from .model.pattern.plot import Plot
-from .model.pattern.powder import PowderPattern
+from .model.pattern.powder import PowderPattern, normalize_profile
+from .model.pattern.utils import (
+    CAGLIOTI_U_DEFAULT,
+    CAGLIOTI_V_DEFAULT,
+    CAGLIOTI_W_DEFAULT,
+)
 from .runtime_layout import resource_path
 
 matplotlib.use("TkAgg")
@@ -84,6 +89,21 @@ class PowderPatternGUI:
         },
     }
     LANGUAGE_LABELS = {"ru": "Русский", "en": "English"}
+    PROFILE_KEYS = ("bar", "gaussian", "lorentzian", "pseudo-voigt")
+    PROFILE_LABELS_BY_LANG = {
+        "ru": {
+            "bar": "штрих",
+            "gaussian": "gaussian",
+            "lorentzian": "lorentzian",
+            "pseudo-voigt": "pseudo-voigt",
+        },
+        "en": {
+            "bar": "bar",
+            "gaussian": "gaussian",
+            "lorentzian": "lorentzian",
+            "pseudo-voigt": "pseudo-voigt",
+        },
+    }
     UI_TEXTS = {
         "ru": {
             "config_frame": "Загрузка кристалла",
@@ -113,13 +133,16 @@ class PowderPatternGUI:
             "profile": "Профиль:",
             "thetam": "θm (град, поляризация):",
             "use_wl2": "Использовать вторую длину волны",
-            "generate_pattern": "Рассчитать паттерн",
+            "generate_pattern": "Рассчитать дифрактограмму",
             "reset_zoom": "Сбросить приближение",
+            "label_reflection_angles": "Подписи углов 2θ",
+            "label_reflection_angles_hkl": "Показать углы и hkl",
+            "hover_angle": "2θ = {angle:.3f}°",
             "print_pattern": "Печать графика",
             "warning_title": "Предупреждение",
             "error_title": "Ошибка",
             "input_error_title": "Ошибка ввода",
-            "no_pattern_to_print": "Сначала постройте powder pattern.",
+            "no_pattern_to_print": "Сначала постройте дифрактограмму.",
             "printer_not_found": "Не найден доступный механизм печати в системе.",
             "print_failed": "Не удалось отправить на печать:\n{error}",
             "print_sent": "График отправлен на печать.",
@@ -127,7 +150,7 @@ class PowderPatternGUI:
             "failed_load_config": "Не удалось загрузить конфиг:\n{error}",
             "config_dir_not_found": "Папка с конфигами не найдена: {path}",
             "invalid_atom_number": "Некорректное число в атоме: {error}",
-            "failed_generate_pattern": "Не удалось построить паттерн:\n{error}",
+            "failed_generate_pattern": "Не удалось построить дифрактограмму:\n{error}",
             "invalid_space_group": "Некорректная группа симметрии (номер Hall или пусто для авто): {value!r}",
             "invalid_second_wavelength": "Некорректная вторая длина волны: {value!r}",
             "invalid_ratio_nonnegative": "Отношение интенсивностей I(λ2)/I(λ1) должно быть неотрицательным.",
@@ -135,10 +158,11 @@ class PowderPatternGUI:
             "orthogonal_cell_warning": "Развёртка P/I/F/C/A/B задаётся в дробях по базису при α≈β≈γ≈90° (куб, тетрагон, орторомб и т.п.). Атомы не разворачиваются.",
             "plot_xlabel": "2θ (град)",
             "plot_ylabel": "Интенсивность",
-            "plot_title": "Суммарный порошковый паттерн",
+            "plot_title": "Дифрактограмма",
             "ratio_on_plot": "\nI(λ2)/I(λ1) = {ratio:g} (на графике)",
             "success_title": "Успех",
             "success_message": "Рассчитано для длин волн: {wl_msg}{ratio_msg}\nСохранено в {run_dir}: TXT и изображение для первой длины волны.",
+            "window_title": "Расчёт дифрактограммы",
         },
         "en": {
             "config_frame": "Load Default Crystal",
@@ -168,21 +192,24 @@ class PowderPatternGUI:
             "profile": "Profile:",
             "thetam": "θm (deg, polarization):",
             "use_wl2": "Use second wavelength",
-            "generate_pattern": "Generate Pattern",
+            "generate_pattern": "Calculate diffractogram",
             "reset_zoom": "Reset Zoom",
+            "label_reflection_angles": "Label 2θ angles",
+            "label_reflection_angles_hkl": "Show angles and hkl",
+            "hover_angle": "2θ = {angle:.3f}°",
             "print_pattern": "Print pattern",
             "warning_title": "Warning",
             "error_title": "Error",
             "input_error_title": "Input Error",
-            "no_pattern_to_print": "Build a powder pattern first.",
+            "no_pattern_to_print": "Build a diffractogram first.",
             "printer_not_found": "No available system print backend was found.",
             "print_failed": "Failed to print:\n{error}",
-            "print_sent": "Pattern was sent to printer.",
+            "print_sent": "Diffractogram was sent to printer.",
             "at_least_one_atom": "At least one atom required.",
             "failed_load_config": "Failed to load config:\n{error}",
             "config_dir_not_found": "Config directory not found: {path}",
             "invalid_atom_number": "Invalid number in atom: {error}",
-            "failed_generate_pattern": "Failed to generate pattern:\n{error}",
+            "failed_generate_pattern": "Failed to build diffractogram:\n{error}",
             "invalid_space_group": "Invalid space group (Hall number or empty for auto): {value!r}",
             "invalid_second_wavelength": "Invalid second wavelength: {value!r}",
             "invalid_ratio_nonnegative": "Intensity ratio I(λ2)/I(λ1) must be non-negative.",
@@ -190,16 +217,16 @@ class PowderPatternGUI:
             "orthogonal_cell_warning": "P/I/F/C/A/B expansion is defined in fractional shifts for basis with α≈β≈γ≈90° (cubic, tetragonal, orthorhombic, etc.). Atoms are not expanded.",
             "plot_xlabel": "2θ (deg)",
             "plot_ylabel": "Intensity",
-            "plot_title": "Combined powder pattern",
+            "plot_title": "Diffractogram",
             "ratio_on_plot": "\nI(λ2)/I(λ1) = {ratio:g} (on plot)",
             "success_title": "Success",
             "success_message": "Calculated for wavelengths: {wl_msg}{ratio_msg}\nSaved under {run_dir}: TXT and image files for the first wavelength.",
+            "window_title": "Diffractogram calculator",
         },
     }
 
     def __init__(self, root):
         self.root = root
-        self.root.title("Powder Pattern Generator")
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
         h = max(600, sh - 100)
@@ -218,9 +245,8 @@ class PowderPatternGUI:
         # P/I/F/C/A/B — развёртка по центровке (дроби ячейки) при Hall пусто
         self.bravais_centering_var = tk.StringVar(value="none")
         self.language_var = tk.StringVar(value="ru")
-        self.lattice_family_var = tk.StringVar(
-            value=self._lattice_label("manual")
-        )
+        self.root.title(self.tr("window_title"))
+        self.lattice_family_var = tk.StringVar(value=self._lattice_label("manual"))
         self._lattice_trace_ids = []
         self._lattice_sync_guard = False
         self._cell_entries = {}
@@ -244,11 +270,11 @@ class PowderPatternGUI:
         self.tth_end_var = tk.DoubleVar(value=150.0)
         self.tth_step_var = tk.DoubleVar(value=0.02)
 
-        self.U_var = tk.DoubleVar(value=0.0026)
-        self.V_var = tk.DoubleVar(value=-0.0018)
-        self.W_var = tk.DoubleVar(value=0.0010)
+        self.U_var = tk.DoubleVar(value=CAGLIOTI_U_DEFAULT)
+        self.V_var = tk.DoubleVar(value=CAGLIOTI_V_DEFAULT)
+        self.W_var = tk.DoubleVar(value=CAGLIOTI_W_DEFAULT)
         self.scale_var = tk.DoubleVar(value=1.0)
-        self.profile_var = tk.StringVar(value="stick")
+        self.profile_var = tk.StringVar(value=self.PROFILE_LABELS_BY_LANG["ru"]["bar"])
         self.eta_var = tk.DoubleVar(value=0.5)
         self.intensity_units_var = tk.StringVar(value="arbitrary")
         self.normalize_intensity_var = tk.BooleanVar(value=True)
@@ -263,6 +289,8 @@ class PowderPatternGUI:
         self.config_files = {}
         self.atoms_frame = None
         self.show_biso_var = tk.BooleanVar(value=False)
+        self.label_angles_var = tk.BooleanVar(value=False)
+        self.label_angles_hkl_var = tk.BooleanVar(value=False)
         self._atom_header_labels = []
         self._section_content = {}
         self._section_buttons = {}
@@ -270,6 +298,8 @@ class PowderPatternGUI:
         self._hkl_hover_peaks = None
         self._hkl_hover_annot = None
         self._hkl_hover_tol = 1.0
+        self._plot_peak_data = None
+        self._peak_label_artists = []
         self._zoom_selector = None
         self._zoom_reset_cid = None
         self._full_xlim = None
@@ -286,6 +316,14 @@ class PowderPatternGUI:
         lang = self.language_var.get().strip().lower()
         return self.UI_TEXTS.get(lang, self.UI_TEXTS["en"]).get(key, key)
 
+    @staticmethod
+    def _configure_twotheta_axis(ax) -> None:
+        """2θ: штрих каждый градус (без подписи), подписи каждые 10°."""
+        ax.xaxis.set_major_locator(MultipleLocator(10))
+        ax.xaxis.set_minor_locator(MultipleLocator(1))
+        ax.tick_params(axis="x", which="major", length=6)
+        ax.tick_params(axis="x", which="minor", length=3)
+
     def _lattice_label(self, key: str) -> str:
         lang = self.language_var.get().strip().lower()
         return self.LATTICE_FAMILY_LABELS_BY_LANG.get(
@@ -298,15 +336,44 @@ class PowderPatternGUI:
     def _set_lattice_family_by_key(self, key: str):
         self.lattice_family_var.set(self._lattice_label(key))
 
+    def _profile_label(self, key: str) -> str:
+        lang = self.language_var.get().strip().lower()
+        return self.PROFILE_LABELS_BY_LANG.get(
+            lang, self.PROFILE_LABELS_BY_LANG["en"]
+        ).get(key, key)
+
+    def _profile_labels(self):
+        return [self._profile_label(k) for k in self.PROFILE_KEYS]
+
+    def _profile_key(self) -> str:
+        label = self.profile_var.get().strip()
+        for labels in self.PROFILE_LABELS_BY_LANG.values():
+            for key, lbl in labels.items():
+                if lbl == label:
+                    return key
+        return normalize_profile(label)
+
+    def _set_profile_by_key(self, key: str):
+        self.profile_var.set(self._profile_label(normalize_profile(key)))
+
     def _on_language_selected(self, _event=None):
         current_family = self._lattice_family_key()
-        selected_config = self.config_combo.get().strip() if hasattr(self, "config_combo") else ""
+        current_profile = self._profile_key()
+        label_angles = self.label_angles_var.get()
+        label_angles_hkl = self.label_angles_hkl_var.get()
+        selected_config = (
+            self.config_combo.get().strip() if hasattr(self, "config_combo") else ""
+        )
         for child in self.root.winfo_children():
             child.destroy()
         self._section_content = {}
         self._section_buttons = {}
         self.create_widgets()
         self._set_lattice_family_by_key(current_family)
+        self._set_profile_by_key(current_profile)
+        self.label_angles_var.set(label_angles)
+        self.label_angles_hkl_var.set(label_angles_hkl)
+        self.root.title(self.tr("window_title"))
         self.scan_config_files()
         if selected_config and selected_config in self.config_files:
             self.config_combo.set(selected_config)
@@ -438,13 +505,15 @@ class PowderPatternGUI:
         name_inner = ttk.Frame(name_row)
         name_inner.pack(anchor="center", pady=2)
         ttk.Label(name_inner, text=self.tr("name")).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Entry(
-            name_inner, textvariable=self.name_var, width=self.input_width
-        ).pack(side=tk.LEFT)
+        ttk.Entry(name_inner, textvariable=self.name_var, width=self.input_width).pack(
+            side=tk.LEFT
+        )
         row += 1
 
         cell_mode_row = ttk.Frame(crystal_frame)
-        cell_mode_row.grid(row=row, column=0, columnspan=4, sticky="ew", padx=5, pady=(4, 2))
+        cell_mode_row.grid(
+            row=row, column=0, columnspan=4, sticky="ew", padx=5, pady=(4, 2)
+        )
         cell_mode_inner = ttk.Frame(cell_mode_row)
         cell_mode_inner.pack(anchor="center")
 
@@ -488,9 +557,7 @@ class PowderPatternGUI:
         self._cell_entries["alpha"] = ttk.Entry(
             crystal_frame, textvariable=self.alpha_var, width=self.input_width
         )
-        self._cell_entries["alpha"].grid(
-            row=row, column=3, sticky="w", padx=5, pady=2
-        )
+        self._cell_entries["alpha"].grid(row=row, column=3, sticky="w", padx=5, pady=2)
         row += 1
 
         ttk.Label(crystal_frame, text=self.tr("b_axis")).grid(
@@ -506,9 +573,7 @@ class PowderPatternGUI:
         self._cell_entries["beta"] = ttk.Entry(
             crystal_frame, textvariable=self.beta_var, width=self.input_width
         )
-        self._cell_entries["beta"].grid(
-            row=row, column=3, sticky="w", padx=5, pady=2
-        )
+        self._cell_entries["beta"].grid(row=row, column=3, sticky="w", padx=5, pady=2)
         row += 1
 
         ttk.Label(crystal_frame, text=self.tr("c_axis")).grid(
@@ -524,9 +589,7 @@ class PowderPatternGUI:
         self._cell_entries["gamma"] = ttk.Entry(
             crystal_frame, textvariable=self.gamma_var, width=self.input_width
         )
-        self._cell_entries["gamma"].grid(
-            row=row, column=3, sticky="w", padx=5, pady=2
-        )
+        self._cell_entries["gamma"].grid(row=row, column=3, sticky="w", padx=5, pady=2)
         row += 1
 
         self._apply_lattice_constraints()
@@ -555,9 +618,9 @@ class PowderPatternGUI:
         ttk.Button(btn_frame, text=self.tr("add_atom"), command=self.add_atom).pack(
             side=tk.LEFT, padx=5
         )
-        ttk.Button(btn_frame, text=self.tr("remove_atom"), command=self.remove_atom).pack(
-            side=tk.LEFT, padx=5
-        )
+        ttk.Button(
+            btn_frame, text=self.tr("remove_atom"), command=self.remove_atom
+        ).pack(side=tk.LEFT, padx=5)
 
         # Параметры дифракции (сворачиваемая секция)
         pattern_frame = self._create_collapsible_section(
@@ -570,9 +633,7 @@ class PowderPatternGUI:
         )
         ttk.Entry(
             pattern_frame, textvariable=self.wavelength_var, width=self.input_width
-        ).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
-        )
+        ).grid(row=row, column=1, sticky="w", padx=5, pady=2)
         row += 1
 
         ttk.Checkbutton(
@@ -591,7 +652,9 @@ class PowderPatternGUI:
             row=0, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(
-            self._wl2_fields_frame, textvariable=self.wavelength2_var, width=self.input_width
+            self._wl2_fields_frame,
+            textvariable=self.wavelength2_var,
+            width=self.input_width,
         ).grid(row=0, column=1, sticky="w", padx=5, pady=2)
 
         ttk.Label(self._wl2_fields_frame, text=self.tr("wl2_ratio")).grid(
@@ -623,28 +686,24 @@ class PowderPatternGUI:
         )
         row += 1
 
-
         ttk.Label(pattern_frame, text=self.tr("profile")).grid(
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         profile_combo = ttk.Combobox(
             pattern_frame,
             textvariable=self.profile_var,
-            values=["stick", "gaussian", "lorentzian", "pseudo-voigt"],
+            values=self._profile_labels(),
             width=self.input_width,
         )
         profile_combo.grid(row=row, column=1, sticky="w", padx=5, pady=2)
         row += 1
-
 
         ttk.Label(pattern_frame, text=self.tr("thetam")).grid(
             row=row, column=0, sticky="e", padx=5, pady=2
         )
         ttk.Entry(
             pattern_frame, textvariable=self.thetam_deg_var, width=self.input_width
-        ).grid(
-            row=row, column=1, sticky="w", padx=5, pady=2
-        )
+        ).grid(row=row, column=1, sticky="w", padx=5, pady=2)
         row += 1
 
         actions_row = ttk.Frame(self.form_container)
@@ -654,6 +713,21 @@ class PowderPatternGUI:
         ).pack(side=tk.LEFT, padx=(0, 8))
         ttk.Button(
             actions_row, text=self.tr("reset_zoom"), command=self._reset_zoom
+        ).pack(side=tk.LEFT)
+
+        options_row = ttk.Frame(self.form_container)
+        options_row.pack(anchor="w", padx=10, pady=(0, 6))
+        ttk.Checkbutton(
+            options_row,
+            text=self.tr("label_reflection_angles"),
+            variable=self.label_angles_var,
+            command=self._on_reflection_labels_toggled,
+        ).pack(side=tk.LEFT, padx=(0, 12))
+        ttk.Checkbutton(
+            options_row,
+            text=self.tr("label_reflection_angles_hkl"),
+            variable=self.label_angles_hkl_var,
+            command=self._on_reflection_labels_toggled,
         ).pack(side=tk.LEFT)
 
         footer = ttk.Frame(self.form_container)
@@ -742,6 +816,7 @@ class PowderPatternGUI:
             if os.name == "nt":
                 # Windows: используем системный shell-print для зарегистрированного PNG viewer.
                 os.startfile(tmp_path, "print")
+
                 # Дадим spooler время прочитать файл перед удалением.
                 def _cleanup_tmp(p):
                     try:
@@ -1170,7 +1245,7 @@ class PowderPatternGUI:
         if "scale" in config:
             self.scale_var.set(float(config["scale"]))
         if "profile" in config:
-            self.profile_var.set(str(config["profile"]))
+            self._set_profile_by_key(str(config["profile"]))
         if "eta" in config:
             self.eta_var.set(float(config["eta"]))
         if "intensity_units" in config:
@@ -1246,7 +1321,11 @@ class PowderPatternGUI:
 
     def _lock_cell_angle(self, which: str, value: float):
         E = self._cell_entries
-        var_map = {"alpha": self.alpha_var, "beta": self.beta_var, "gamma": self.gamma_var}
+        var_map = {
+            "alpha": self.alpha_var,
+            "beta": self.beta_var,
+            "gamma": self.gamma_var,
+        }
         self._lattice_sync_guard = True
         try:
             var_map[which].set(float(value))
@@ -1463,9 +1542,103 @@ class PowderPatternGUI:
                 return None
         return new_atoms
 
+    def _build_plot_peak_data(self, all_reflections, x, y_combined):
+        peaks = []
+        x0, x1 = float(x[0]), float(x[-1])
+        for ref in all_reflections:
+            xc = float(ref["twotheta"])
+            if not (x0 <= xc <= x1):
+                continue
+            hkl = ref["hkl"]
+            h, k, l = (
+                int(round(hkl[0])),
+                int(round(hkl[1])),
+                int(round(hkl[2])),
+            )
+            yp = float(np.interp(xc, x, y_combined))
+            hkl_str = f"{h}{k}{l}"
+            peaks.append(
+                {
+                    "xc": xc,
+                    "yp": yp,
+                    "hkl": hkl_str,
+                    "hover_hkl": hkl_str,
+                    "hover_full": (
+                        f"{hkl_str}\n" + self.tr("hover_angle").format(angle=xc)
+                    ),
+                    "angle_label": f"{xc:.2f}°",
+                }
+            )
+        return peaks
+
+    def _clear_peak_label_artists(self):
+        for artist in self._peak_label_artists:
+            try:
+                if artist.axes is not None:
+                    artist.remove()
+            except (ValueError, AttributeError):
+                pass
+        self._peak_label_artists.clear()
+
+    def _apply_reflection_label_mode(self):
+        if self._plot_peak_data is None:
+            return
+        show_both = self.label_angles_hkl_var.get()
+        show_angles = self.label_angles_var.get() and not show_both
+        self._clear_peak_label_artists()
+        self._hkl_hover_peaks = []
+        labeled_angles = set()
+        y_top = self.ax.get_ylim()[1]
+        for peak in self._plot_peak_data:
+            xc, yp = peak["xc"], peak["yp"]
+            if show_both:
+                y_text = min(yp * 1.02, y_top * 0.98) if yp > 0 else y_top * 0.05
+                txt = self.ax.text(
+                    xc,
+                    y_text,
+                    f"{peak['hkl']}\n{peak['angle_label']}",
+                    fontsize=11,
+                    ha="center",
+                    va="bottom",
+                    alpha=0.85,
+                    clip_on=True,
+                    zorder=5,
+                )
+                self._peak_label_artists.append(txt)
+            elif show_angles:
+                self._hkl_hover_peaks.append((xc, yp, peak["hover_hkl"]))
+                angle_key = round(xc, 3)
+                if angle_key in labeled_angles:
+                    continue
+                labeled_angles.add(angle_key)
+                y_text = min(yp * 1.02, y_top * 0.98) if yp > 0 else y_top * 0.05
+                txt = self.ax.text(
+                    xc,
+                    y_text,
+                    peak["angle_label"],
+                    fontsize=11,
+                    ha="center",
+                    va="bottom",
+                    alpha=0.85,
+                    clip_on=True,
+                    zorder=5,
+                )
+                self._peak_label_artists.append(txt)
+            else:
+                self._hkl_hover_peaks.append((xc, yp, peak["hover_full"]))
+        self.canvas.draw_idle()
+
+    def _on_reflection_labels_toggled(self):
+        self._apply_reflection_label_mode()
+
     def _on_hkl_hover_motion(self, event):
         ann = self._hkl_hover_annot
         if ann is None:
+            return
+        if self.label_angles_hkl_var.get():
+            if ann.get_visible():
+                ann.set_visible(False)
+                self.canvas.draw_idle()
             return
         peaks = self._hkl_hover_peaks
         if not peaks:
@@ -1649,7 +1822,7 @@ class PowderPatternGUI:
                     V=V,
                     W=W,
                     scale=scale,
-                    profile=self.profile_var.get(),
+                    profile=self._profile_key(),
                     eta=eta,
                     intensity_units=self.intensity_units_var.get(),
                     normalize_intensity=self.normalize_intensity_var.get(),
@@ -1687,27 +1860,21 @@ class PowderPatternGUI:
                 }
             )
             self.ax.clear()
+            self._peak_label_artists.clear()
             self.ax.plot(x, y_combined, linewidth=1.3)
             self.ax.set_xlabel(self.tr("plot_xlabel"), fontsize=14)
             self.ax.set_ylabel(self.tr("plot_ylabel"), fontsize=14)
             self.ax.set_title(self.tr("plot_title"), fontsize=15)
             self.ax.tick_params(axis="both", labelsize=11)
-            self.ax.xaxis.set_minor_locator(AutoMinorLocator(5))
-            self.ax.tick_params(axis="x", which="major", length=6)
-            self.ax.tick_params(axis="x", which="minor", length=3)
+            self._configure_twotheta_axis(self.ax)
             self.ax.grid(True, axis="x", which="major", linewidth=0.6, alpha=0.45)
             self.ax.grid(True, axis="x", which="minor", linewidth=0.35, alpha=0.25)
             y_top = float(np.max(y_combined)) if len(y_combined) else 1.0
             self._hkl_hover_tol = 1.0
+            self._plot_peak_data = self._build_plot_peak_data(
+                all_reflections, x, y_combined
+            )
             self._hkl_hover_peaks = []
-            for hkl, xc, _ in sorted(all_hkl_labels, key=lambda t: t[1]):
-                if not (x[0] <= xc <= x[-1]):
-                    continue
-                h, k, l = (int(round(hkl[0])), int(round(hkl[1])), int(round(hkl[2])))
-                yp = float(np.interp(xc, x, y_combined))
-                self._hkl_hover_peaks.append(
-                    (xc, yp, f"{h}{k}{l}\n2θ = {xc:.3f}°")
-                )
             self._hkl_hover_annot = self.ax.annotate(
                 "",
                 xy=(0, 0),
@@ -1725,9 +1892,8 @@ class PowderPatternGUI:
             self._hkl_hover_cid = self.canvas.mpl_connect(
                 "motion_notify_event", self._on_hkl_hover_motion
             )
-            self.ax.set_ylim(
-                bottom=0.0, top=(y_top * 1.08 if y_top > 0 else 1.0)
-            )
+            self.ax.set_ylim(bottom=0.0, top=(y_top * 1.08 if y_top > 0 else 1.0))
+            self._apply_reflection_label_mode()
             if angle_values:
                 self.ax.vlines(
                     angle_values,

@@ -1,5 +1,6 @@
 import json
 import os
+from turtle import right
 from typing import Dict
 
 import numpy as np
@@ -7,6 +8,9 @@ import numpy as np
 from ..crystal.crystal import Crystal
 from ..crystal.structure import structure_factor
 from .utils import (
+    CAGLIOTI_U_DEFAULT,
+    CAGLIOTI_V_DEFAULT,
+    CAGLIOTI_W_DEFAULT,
     NumpyEncoder,
     array_weight,
     caglioti_fwhm,
@@ -16,6 +20,14 @@ from .utils import (
     p_factor,
     pseudo_voigt,
 )
+
+_PROFILE_ALIASES = {"stick": "bar", "штрих": "bar"}
+
+
+def normalize_profile(profile: str) -> str:
+    """Каноническое имя профиля (bar, gaussian, …); stick и штрих → bar."""
+    key = profile.strip().lower()
+    return _PROFILE_ALIASES.get(key, key)
 
 
 def _format_F_tsv(F: complex, eps: float = 1e-9) -> str:
@@ -39,9 +51,9 @@ class PowderPattern:
         wavelength: float,
         twotheta_range: np.ndarray,
         thetam_deg: float,
-        U: float = 0.0026,
-        V: float = -0.0018,
-        W: float = 0.0010,
+        U: float = CAGLIOTI_U_DEFAULT,
+        V: float = CAGLIOTI_V_DEFAULT,
+        W: float = CAGLIOTI_W_DEFAULT,
         scale: float = 1.0,
         profile: str = "pvoigt",
         eta: float = 0.5,
@@ -64,7 +76,7 @@ class PowderPattern:
         self.thetam_deg = thetam_deg
         self.U, self.V, self.W = U, V, W
         self.scale = scale
-        self.profile = profile
+        self.profile = normalize_profile(profile)
         self.eta = eta
         self.bg_poly = bg_poly if bg_poly is not None else [0, 0, 0]
         self.intensity_units = intensity_units
@@ -117,7 +129,9 @@ class PowderPattern:
                     if np.isnan(th):
                         continue
                     twoth = 2 * np.degrees(th)
-                    F = structure_factor(self.crystal, (h, k, l), th, self.wavelength)
+                    F, f_temp = structure_factor(
+                        self.crystal, (h, k, l), th, self.wavelength
+                    )
                     if self.multiplicity_mode == "metric":
                         mult, hkl_group = self.crystal.multiplicity_metric(
                             (h, k, l),
@@ -164,6 +178,7 @@ class PowderPattern:
                                 "l": lf,
                                 "p": pf,
                                 "lp": lpf,
+                                "f": f_temp,
                                 "F": F,
                                 "intensity": intensity,
                             }
@@ -215,8 +230,7 @@ class PowderPattern:
                 f"thetam_deg={self.thetam_deg}\n"
             )
             f.write(
-                f"# caglioti: U={self.U}, V={self.V}, W={self.W}; "
-                f"scale={self.scale}\n"
+                f"# caglioti: U={self.U}, V={self.V}, W={self.W}; scale={self.scale}\n"
             )
             f.write(
                 f"# intensity: units={self.intensity_units}, "
@@ -250,8 +264,10 @@ class PowderPattern:
                 ("twotheta", 10, "right"),
                 ("mult", 6, "right"),
                 ("l", 9, "right"),
+                ("f", 9, "right"),
                 ("p", 9, "right"),
                 ("F", 14, "right"),
+                ("F^2", 14, "right"),
                 ("intensity", 11, "right"),
             ]
 
@@ -282,8 +298,10 @@ class PowderPattern:
                     f"{ref['twotheta']:.3f}",
                     f"{ref['mult']}",
                     f"{ref['l']:.3f}",
+                    f"{ref['f']:.3f}",
                     f"{ref['p']:.3f}",
                     _format_F_tsv(ref["F"]),
+                    _format_F_tsv(ref["F"] ** 2),
                     f"{ref['intensity']:.3f}",
                 ]
                 f.write(_row(row) + "\n")
@@ -306,11 +324,11 @@ class PowderPattern:
             fwhm_deg = np.degrees(fwhm_rad)
             intensity = ref["intensity"]
 
-            if self.profile == "stick":
-                stick = np.zeros_like(self.twotheta)
+            if self.profile == "bar":
+                bar = np.zeros_like(self.twotheta)
                 idx = np.argmin(np.abs(self.twotheta - centre))
-                stick[idx] = 1
-                y_new = intensity * stick
+                bar[idx] = 1
+                y_new = intensity * bar
             elif self.profile == "gaussian":
                 y_new = intensity * gaussian(self.twotheta, centre, fwhm_deg)
             elif self.profile == "lorentzian":
@@ -333,8 +351,8 @@ class PowderPattern:
                 peak_dict[rounded_centre] = (hkl, intensity, key)
 
         # Профили с размытием нормированы на единичную площадь → пик ниже, чем у «палочки».
-        # После свёртки снова вписываем максимум в intensity_max_value (как у stick).
-        if self.normalize_intensity and self.profile != "stick":
+        # После свёртки снова вписываем максимум в intensity_max_value (как у bar).
+        if self.normalize_intensity and self.profile != "bar":
             y_max_all = float(np.max(y))
             if y_max_all > 0:
                 y = y * (self.intensity_max_value / y_max_all)

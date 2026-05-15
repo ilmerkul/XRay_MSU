@@ -36,11 +36,14 @@ def structure_factor(
     s_val = sin(th) / wavelength
     F = 0.0 + 0.0j
 
-    for atom in crystal.full_atoms:
+    f_temp = 0
+    for i, atom in enumerate(crystal.full_atoms):
         if local:
             f_total = crystal.asf.get_f0_from_theta_lambda(
                 symbol=atom.element, theta_deg=th * 180 / pi, lambda_ang=wavelength
             )
+            if i == 0:
+                f_temp = f_total
         else:
             f0 = xraylib.FF_Rayl(xraylib.SymbolToAtomicNumber(atom.element), s_val)
 
@@ -58,7 +61,7 @@ def structure_factor(
 
         F += atom.occ * f_total * T * np.exp(phase)
 
-    return F
+    return F, f_temp
 
 
 def theta(hkl, crystal, wavelength):

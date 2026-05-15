@@ -14,5 +14,5 @@ atoms: [
 
 wavelength: 1.5418
 twotheta_range: [5, 150, 0.02]
-profile: stick
+profile: bar
 thetam_deg: 0.0
