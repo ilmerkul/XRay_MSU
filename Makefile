@@ -82,9 +82,9 @@ endif
 
 lint: ## Проверка стиля (ruff)
 ifeq ($(HAS_UV),yes)
-	cd "$(ROOT)" && uv run ruff check src cmd tests/unit
+	cd "$(ROOT)" && uv run ruff check src tests/unit
 else
-	cd "$(ROOT)" && $(PYTHON) -m ruff check src cmd tests/unit
+	cd "$(ROOT)" && $(PYTHON) -m ruff check src tests/unit
 endif
 
 check: lint test ## lint + pytest
@@ -99,9 +99,9 @@ endif
 
 format: ## Форматирование (ruff format)
 ifeq ($(HAS_UV),yes)
-	cd "$(ROOT)" && uv run ruff format src cmd tests/unit
+	cd "$(ROOT)" && uv run ruff format src tests/unit
 else
-	cd "$(ROOT)" && $(PYTHON) -m ruff format src cmd tests/unit
+	cd "$(ROOT)" && $(PYTHON) -m ruff format src tests/unit
 endif
 
 clean: ## Кэши Python и ruff

@@ -28,7 +28,7 @@ jobs:
         run: uv sync --group dev
 
       - name: Lint
-        run: uv run --group dev ruff check src cmd tests/unit
+        run: uv run --group dev ruff check src tests/unit
 
       - name: pytest
         run: uv run --group dev pytest tests/unit -q
