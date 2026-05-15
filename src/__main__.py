@@ -36,7 +36,7 @@ from .model.pattern.utils import (
     CAGLIOTI_W_DEFAULT,
     normalize_profile,
 )
-from .runtime_layout import resource_path
+from .runtime_layout import asf_data_path, resource_path
 
 matplotlib.use("TkAgg")
 
@@ -285,8 +285,14 @@ class PowderPatternGUI:
         self.multiplicity_metric_atol_var = tk.DoubleVar(value=1e-12)
 
         self.config_dir = self.find_config_dir()
-        asf_path = self.find_asf_data_path()
-        self.asf = AtomicScatteringFactor(asf_path)
+        try:
+            self.asf = AtomicScatteringFactor(asf_data_path())
+        except (FileNotFoundError, ValueError, OSError) as exc:
+            messagebox.showerror(
+                "XRay MSU",
+                f"Не удалось загрузить таблицу f₀ (Waas–Kirfel):\n{exc}",
+            )
+            raise SystemExit(1) from exc
         self.config_files = {}
         self.atoms_frame = None
         self.show_biso_var = tk.BooleanVar(value=False)
@@ -397,24 +403,6 @@ class PowderPatternGUI:
         if os.path.isdir(candidate):
             return candidate
         return "config"
-
-    def find_asf_data_path(self):
-        rp = resource_path("data", "f0_WaasKirf.dat")
-        if rp and os.path.isfile(rp):
-            return rp
-        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-            meipass_dat = os.path.join(sys._MEIPASS, "data", "f0_WaasKirf.dat")
-            if os.path.isfile(meipass_dat):
-                return meipass_dat
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        candidate = os.path.join(script_dir, "data", "f0_WaasKirf.dat")
-        if os.path.isfile(candidate):
-            return candidate
-        parent_dir = os.path.dirname(script_dir)
-        candidate = os.path.join(parent_dir, "data", "f0_WaasKirf.dat")
-        if os.path.isfile(candidate):
-            return candidate
-        return os.path.join(script_dir, "data", "f0_WaasKirf.dat")
 
     def create_widgets(self):
         # tk.PanedWindow: есть minsize/paneconfigure; ttk.Panedwindow — другой API
@@ -1014,7 +1002,7 @@ class PowderPatternGUI:
 
                         atoms_list = ast.literal_eval(atoms_str)
                         config["atoms"] = atoms_list
-                    except:
+                    except (SyntaxError, ValueError):
                         config["atoms"] = atoms_str
                 else:
                     config[key] = self._parse_value(val)
@@ -1032,7 +1020,7 @@ class PowderPatternGUI:
                 return float(v)
             else:
                 return int(v)
-        except:
+        except ValueError:
             pass
         if v.startswith('"') and v.endswith('"'):
             return v[1:-1]
@@ -1527,7 +1515,9 @@ class PowderPatternGUI:
                 occ = float(self.atoms[i]["occ"])
                 new_atoms.append(
                     {
-                        "element": element,
+                        "element": AtomicScatteringFactor.normalize_element_symbol(
+                            element
+                        ),
                         "x": x,
                         "y": y,
                         "z": z,
@@ -1551,13 +1541,13 @@ class PowderPatternGUI:
             if not (x0 <= xc <= x1):
                 continue
             hkl = ref["hkl"]
-            h, k, l = (
+            h, k, l_idx = (
                 int(round(hkl[0])),
                 int(round(hkl[1])),
                 int(round(hkl[2])),
             )
             yp = float(np.interp(xc, x, y_combined))
-            hkl_str = f"{h}{k}{l}"
+            hkl_str = f"{h}{k}{l_idx}"
             peaks.append(
                 {
                     "xc": xc,

@@ -1,6 +1,5 @@
 import json
 import os
-from turtle import right
 from typing import Dict
 
 import numpy as np
@@ -109,12 +108,12 @@ class PowderPattern:
         orbits = set()
         for h in range(-max_index, max_index + 1):
             for k in range(-max_index, max_index + 1):
-                for l in range(-max_index, max_index + 1):
-                    if Crystal.hkl2tuple((h, k, l)) in orbits or (
-                        h == 0 and k == 0 and l == 0
+                for l_idx in range(-max_index, max_index + 1):
+                    if Crystal.hkl2tuple((h, k, l_idx)) in orbits or (
+                        h == 0 and k == 0 and l_idx == 0
                     ):
                         continue
-                    d = self.crystal.d_spacing((h, k, l))
+                    d = self.crystal.d_spacing((h, k, l_idx))
                     if d < d_min:
                         continue
 
@@ -123,17 +122,17 @@ class PowderPattern:
                         continue
                     twoth = 2 * np.degrees(th)
                     F, f_temp = structure_factor(
-                        self.crystal, (h, k, l), th, self.wavelength
+                        self.crystal, (h, k, l_idx), th, self.wavelength
                     )
                     if self.multiplicity_mode == "metric":
                         mult, hkl_group = self.crystal.multiplicity_metric(
-                            (h, k, l),
+                            (h, k, l_idx),
                             max_index,
                             rtol=self.multiplicity_metric_rtol,
                             atol=self.multiplicity_metric_atol,
                         )
                     else:
-                        mult, hkl_group = self.crystal.multiplicity((h, k, l))
+                        mult, hkl_group = self.crystal.multiplicity((h, k, l_idx))
                     orbits.update(hkl_group)
 
                     hkl_name = hkl_group.pop()

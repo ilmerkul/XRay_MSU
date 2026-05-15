@@ -106,7 +106,7 @@ class SpaceGroup:
             R0, _ = self.generators[0]
             dim = R0.shape[0]
 
-        I = np.eye(dim)
+        identity = np.eye(dim)
         zero = np.zeros(dim)
 
         def frac_part(t, mod_lattice=False):
@@ -141,8 +141,8 @@ class SpaceGroup:
 
         elements = {}
 
-        key_id = canonical(I, zero)
-        elements[key_id] = (I.copy(), zero.copy())
+        key_id = canonical(identity, zero)
+        elements[key_id] = (identity.copy(), zero.copy())
 
         for R, t in self.generators:
             R = np.asarray(R)

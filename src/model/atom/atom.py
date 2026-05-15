@@ -1,11 +1,12 @@
 import math
+import os
 
 import numpy as np
 
 
 class Atom:
     def __init__(self, element, x, y, z, occ, Biso):
-        self.element = element
+        self.element = AtomicScatteringFactor.normalize_element_symbol(element)
         self.frac = np.array([x, y, z])
         self.occ = occ
         self.Biso = Biso
@@ -18,14 +19,18 @@ class AtomicScatteringFactor:
         self._parse(filename)
 
     @staticmethod
-    def _normalize_symbol(symbol: str) -> str:
-        s = str(symbol).strip()
+    def normalize_element_symbol(symbol: str) -> str:
+        s = str(symbol).strip().replace("\ufeff", "").replace("\u200b", "")
         if not s:
             return s
         return s[:1].upper() + s[1:].lower()
 
     def _parse(self, filename):
-        with open(filename, "r") as f:
+        path = str(filename)
+        if not path or not os.path.isfile(path):
+            raise FileNotFoundError(f"Файл атомных факторов не найден: {path}")
+
+        with open(path, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
 
         i = 0
@@ -49,14 +54,16 @@ class AtomicScatteringFactor:
                             c = float(tokens[5])
                             b = list(map(float, tokens[6:]))
                             self.data[symbol] = (a, b, c)
-                            self._normalized_index[self._normalize_symbol(symbol)] = (
-                                symbol
-                            )
+                            norm = self.normalize_element_symbol(symbol)
+                            self._normalized_index[norm] = symbol
                         break
                     i += 1
                 i += 1
             else:
                 i += 1
+
+        if not self.data:
+            raise ValueError(f"Файл атомных факторов пуст или не распознан: {path}")
 
     def get_f0(self, symbol, k):
         raw_symbol = str(symbol).strip()
@@ -64,10 +71,9 @@ class AtomicScatteringFactor:
         if raw_symbol in self.data:
             resolved = raw_symbol
         else:
-            normalized = self._normalize_symbol(raw_symbol)
+            normalized = self.normalize_element_symbol(raw_symbol)
             resolved = self._normalized_index.get(normalized)
             if resolved is None:
-                # Fallback: case-insensitive compare for unexpected symbol variants.
                 raw_low = raw_symbol.lower()
                 for key in self.data:
                     if key.lower() == raw_low:
