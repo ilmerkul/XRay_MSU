@@ -36,6 +36,15 @@ def pseudo_voigt(x, centre, fwhm, eta=0.5):
     return eta * lorentzian(x, centre, fwhm) + (1 - eta) * gaussian(x, centre, fwhm)
 
 
+_PROFILE_ALIASES = {"stick": "bar", "штрих": "bar"}
+
+
+def normalize_profile(profile: str) -> str:
+    """Каноническое имя профиля (bar, gaussian, …); stick и штрих → bar."""
+    key = profile.strip().lower()
+    return _PROFILE_ALIASES.get(key, key)
+
+
 # Кальотти: FWHM_θ = sqrt(U tan²θ + V tanθ + W); очень узкие пики (~0.1× «широких»)
 CAGLIOTI_U_DEFAULT = 0.00025
 CAGLIOTI_V_DEFAULT = -0.000175

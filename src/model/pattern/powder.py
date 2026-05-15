@@ -17,17 +17,10 @@ from .utils import (
     gaussian,
     l_factor,
     lorentzian,
+    normalize_profile,
     p_factor,
     pseudo_voigt,
 )
-
-_PROFILE_ALIASES = {"stick": "bar", "штрих": "bar"}
-
-
-def normalize_profile(profile: str) -> str:
-    """Каноническое имя профиля (bar, gaussian, …); stick и штрих → bar."""
-    key = profile.strip().lower()
-    return _PROFILE_ALIASES.get(key, key)
 
 
 def _format_F_tsv(F: complex, eps: float = 1e-9) -> str:

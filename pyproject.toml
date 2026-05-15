@@ -17,7 +17,11 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pyinstaller>=6.6.0"]
+dev = ["pyinstaller>=6.6.0", "pytest>=8.0.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+pythonpath = ["."]
 
 # Предпочитать /usr/bin/python* (дистрибутивный tkinter → libtcl8.6 + python3-tk). Автономные сборки uv
 # часто слинкованы с Tcl 9; на LTS без пакетов libtcl9* ldd даёт «not found» и PyInstaller GUI не собрать.

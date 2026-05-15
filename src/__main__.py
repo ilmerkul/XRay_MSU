@@ -29,11 +29,12 @@ from .model.atom.atom import Atom, AtomicScatteringFactor
 from .model.crystal.crystal import Crystal
 from .model.crystal.utils import expand_atoms_bravais_centering
 from .model.pattern.plot import Plot
-from .model.pattern.powder import PowderPattern, normalize_profile
+from .model.pattern.powder import PowderPattern
 from .model.pattern.utils import (
     CAGLIOTI_U_DEFAULT,
     CAGLIOTI_V_DEFAULT,
     CAGLIOTI_W_DEFAULT,
+    normalize_profile,
 )
 from .runtime_layout import resource_path
 

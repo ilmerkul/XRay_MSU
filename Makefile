@@ -30,7 +30,7 @@ DOC_SRC ?= doc/README.md
 DOC_OUT ?= doc/README.pdf
 DOC_TITLE ?= XRay_MSU — алгоритм
 
-.PHONY: help install sync run gui lint format check clean doc-pdf doc-pdf-overview doc-pdf-all dist dist-gui dist-cli dist-win dist-win-gui dist-win-cli clean-dist
+.PHONY: help install sync run gui lint format check test clean doc-pdf doc-pdf-overview doc-pdf-all dist dist-gui dist-cli dist-win dist-win-gui dist-win-cli clean-dist
 
 help: ## Показать цели
 	@echo "XRay_MSU — make-цели (рабочий каталог: $(ROOT))"
@@ -41,7 +41,8 @@ help: ## Показать цели
 	@echo "  make gui       — GUI: python -m src"
 	@echo "  make lint      — ruff check"
 	@echo "  make format    — ruff format"
-	@echo "  make check     — lint (без правок)"
+	@echo "  make check     — lint + pytest"
+	@echo "  make test      — pytest (tests/unit/)"
 	@echo "  make clean     — удалить __pycache__ и кэш ruff"
 	@echo "  make doc-pdf           — DOC_SRC → DOC_OUT (по умолчанию doc/README.md → doc/README.pdf)"
 	@echo "  make doc-pdf-overview  — doc/README-overview.md → doc/README-overview.pdf"
@@ -79,23 +80,33 @@ else
 	cd "$(ROOT)" && $(PYTHON) -m src
 endif
 
-lint check: ## Проверка стиля (ruff)
+lint: ## Проверка стиля (ruff)
 ifeq ($(HAS_UV),yes)
-	cd "$(ROOT)" && uv run ruff check src cmd
+	cd "$(ROOT)" && uv run ruff check src cmd tests/unit
 else
-	cd "$(ROOT)" && $(PYTHON) -m ruff check src cmd
+	cd "$(ROOT)" && $(PYTHON) -m ruff check src cmd tests/unit
+endif
+
+check: lint test ## lint + pytest
+
+test: ## Юнит- и интеграционные тесты (pytest)
+ifeq ($(HAS_UV),yes)
+	cd "$(ROOT)" && uv sync --group dev
+	cd "$(ROOT)" && uv run --group dev pytest tests/unit -q
+else
+	cd "$(ROOT)" && $(PYTHON) -m pytest tests/unit -q
 endif
 
 format: ## Форматирование (ruff format)
 ifeq ($(HAS_UV),yes)
-	cd "$(ROOT)" && uv run ruff format src cmd
+	cd "$(ROOT)" && uv run ruff format src cmd tests/unit
 else
-	cd "$(ROOT)" && $(PYTHON) -m ruff format src cmd
+	cd "$(ROOT)" && $(PYTHON) -m ruff format src cmd tests/unit
 endif
 
 clean: ## Кэши Python и ruff
 	cd "$(ROOT)" && find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
-	cd "$(ROOT)" && rm -rf .ruff_cache
+	cd "$(ROOT)" && rm -rf .ruff_cache .pytest_cache
 
 doc-pdf: ## $(DOC_SRC) → $(DOC_OUT) (pandoc, xelatex, шрифты DejaVu)
 	cd "$(ROOT)" && $(PYTHON) scripts/readme_md_for_pandoc.py "$(DOC_SRC)" > doc/.README_for_pdf.md
