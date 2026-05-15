@@ -29,6 +29,15 @@ class TestAtomicScatteringFactor:
         with pytest.raises(ValueError, match="пуст или не распознан"):
             AtomicScatteringFactor(str(bad))
 
+    def test_git_lfs_pointer_raises(self, tmp_path):
+        pointer = tmp_path / "lfs.dat"
+        pointer.write_text(
+            "version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 42473\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="Git LFS"):
+            AtomicScatteringFactor(str(pointer))
+
 
 class TestAsfDataPath:
     def test_resolves_repo_file(self, repo_root):

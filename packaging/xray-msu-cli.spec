@@ -11,7 +11,6 @@ block_cipher = None
 datas = [
     (str(ROOT / "data" / "f0_WaasKirf.dat"), "data"),
     (str(ROOT / "config"), "config"),
-    (str(ROOT / "cmd" / "main.py"), "cmd"),
 ]
 
 hiddenimports = [

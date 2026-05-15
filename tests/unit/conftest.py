@@ -24,6 +24,9 @@ def asf_path(repo_root: Path) -> Path:
     path = repo_root / "data" / "f0_WaasKirf.dat"
     if not path.is_file():
         pytest.skip("ASF data file missing")
+    head = path.read_text(encoding="utf-8", errors="replace")[:80]
+    if head.startswith("version https://git-lfs.github.com/spec/v1"):
+        pytest.skip("data/f0_WaasKirf.dat is a Git LFS pointer; run: git lfs pull")
     return path
 
 

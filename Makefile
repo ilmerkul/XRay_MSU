@@ -37,7 +37,7 @@ help: ## Показать цели
 	@echo ""
 	@echo "  make install   — зависимости: uv sync или pip install -e ."
 	@echo "  make sync      — то же, что install"
-	@echo "  make run       — расчёт и график: cmd/main.py (конфиг внутри скрипта)"
+	@echo "  make run       — расчёт и график: entry_cli.py (конфиг внутри скрипта)"
 	@echo "  make gui       — GUI: python -m src"
 	@echo "  make lint      — ruff check"
 	@echo "  make format    — ruff format"
@@ -68,9 +68,9 @@ endif
 
 run: ## Пайплайн порошковой дифракции (OmegaConf + Plot)
 ifeq ($(HAS_UV),yes)
-	cd "$(ROOT)" && uv run python cmd/main.py
+	cd "$(ROOT)" && uv run python entry_cli.py
 else
-	cd "$(ROOT)" && $(PYTHON) cmd/main.py
+	cd "$(ROOT)" && $(PYTHON) entry_cli.py
 endif
 
 gui: ## Окно Tk / matplotlib (пакет src)
@@ -82,9 +82,9 @@ endif
 
 lint: ## Проверка стиля (ruff)
 ifeq ($(HAS_UV),yes)
-	cd "$(ROOT)" && uv run ruff check src tests/unit
+	cd "$(ROOT)" && uv run ruff check src entry_cli.py entry_gui.py tests/unit
 else
-	cd "$(ROOT)" && $(PYTHON) -m ruff check src tests/unit
+	cd "$(ROOT)" && $(PYTHON) -m ruff check src entry_cli.py entry_gui.py tests/unit
 endif
 
 check: lint test ## lint + pytest
@@ -99,9 +99,9 @@ endif
 
 format: ## Форматирование (ruff format)
 ifeq ($(HAS_UV),yes)
-	cd "$(ROOT)" && uv run ruff format src tests/unit
+	cd "$(ROOT)" && uv run ruff format src entry_cli.py entry_gui.py tests/unit
 else
-	cd "$(ROOT)" && $(PYTHON) -m ruff format src tests/unit
+	cd "$(ROOT)" && $(PYTHON) -m ruff format src entry_cli.py entry_gui.py tests/unit
 endif
 
 clean: ## Кэши Python и ruff
