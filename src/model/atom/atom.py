@@ -33,6 +33,12 @@ class AtomicScatteringFactor:
         with open(path, encoding="utf-8", errors="replace") as f:
             lines = f.readlines()
 
+        if lines and lines[0].startswith("version https://git-lfs.github.com/spec/v1"):
+            raise ValueError(
+                f"Файл {path} — указатель Git LFS, а не таблица f₀. "
+                "Выполните: git lfs pull"
+            )
+
         i = 0
         n = len(lines)
         while i < n:
