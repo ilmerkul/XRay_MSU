@@ -25,12 +25,13 @@ IS_WIN := yes
 endif
 endif
 
-# Документация → PDF (pandoc + xelatex): переопределите DOC_SRC / DOC_OUT / DOC_TITLE при необходимости
+# Документация (pandoc): переопределите DOC_SRC / DOC_*_OUT / DOC_TITLE при необходимости
 DOC_SRC ?= doc/README.md
 DOC_OUT ?= doc/README.pdf
+DOCX_OUT ?= doc/README.docx
 DOC_TITLE ?= XRay_MSU — алгоритм
 
-.PHONY: help install sync run gui lint format check test clean doc-pdf doc-pdf-overview doc-pdf-all dist dist-gui dist-cli dist-win dist-win-gui dist-win-cli clean-dist
+.PHONY: help install sync run gui lint format check test clean doc-pdf doc-pdf-overview doc-pdf-all doc-docx doc-docx-overview doc-docx-all dist dist-gui dist-cli dist-win dist-win-gui dist-win-cli clean-dist
 
 help: ## Показать цели
 	@echo "XRay_MSU — make-цели (рабочий каталог: $(ROOT))"
@@ -47,6 +48,9 @@ help: ## Показать цели
 	@echo "  make doc-pdf           — DOC_SRC → DOC_OUT (по умолчанию doc/README.md → doc/README.pdf)"
 	@echo "  make doc-pdf-overview  — doc/README-overview.md → doc/README-overview.pdf"
 	@echo "  make doc-pdf-all       — оба PDF (нужны pandoc, xelatex, шрифты DejaVu)"
+	@echo "  make doc-docx          — DOC_SRC → DOCX_OUT (по умолчанию doc/README.md → doc/README.docx)"
+	@echo "  make doc-docx-overview — doc/README-overview.md → doc/README-overview.docx"
+	@echo "  make doc-docx-all      — оба DOCX (нужен pandoc)"
 	@echo "  make dist      — PyInstaller: GUI + CLI (на Windows — оба .exe через dist-gui/dist-cli)"
 	@echo "  make dist-gui  — GUI: Windows → xray-msu-gui.exe; Linux — onedir + check_linux_tkinter_ldd"
 	@echo "  make dist-cli  — CLI: Windows → xray-msu-cli.exe; иначе бинарник без .exe"
@@ -127,6 +131,22 @@ doc-pdf-overview: ## doc/README-overview.md → doc/README-overview.pdf
 		DOC_TITLE='XRay_MSU — обзор'
 
 doc-pdf-all: doc-pdf doc-pdf-overview ## Собрать doc/README.pdf и doc/README-overview.pdf
+	@true
+
+doc-docx: ## $(DOC_SRC) → $(DOCX_OUT) (pandoc → docx)
+	cd "$(ROOT)" && $(PYTHON) scripts/readme_md_for_pandoc.py "$(DOC_SRC)" > doc/.README_for_pandoc.md
+	cd "$(ROOT)" && pandoc doc/.README_for_pandoc.md -o "$(DOCX_OUT)" \
+		--metadata title="$(DOC_TITLE)" \
+		-N
+	rm -f "$(ROOT)/doc/.README_for_pandoc.md"
+
+doc-docx-overview: ## doc/README-overview.md → doc/README-overview.docx
+	@$(MAKE) -C "$(ROOT)" doc-docx \
+		DOC_SRC=doc/README-overview.md \
+		DOCX_OUT=doc/README-overview.docx \
+		DOC_TITLE='XRay_MSU — обзор'
+
+doc-docx-all: doc-docx doc-docx-overview ## Собрать doc/README.docx и doc/README-overview.docx
 	@true
 
 dist: dist-gui dist-cli ## Собрать оба бинарника (PyInstaller)
