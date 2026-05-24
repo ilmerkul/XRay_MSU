@@ -1,3 +1,4 @@
+import fnmatch
 import glob
 import json
 import locale
@@ -6,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 # До import tkinter: на Windows с LC_NUMERIC≠C виджеты DoubleVar/ввод часто ломаются (запятая vs точка).
 try:
@@ -14,10 +16,9 @@ except (locale.Error, OSError):
     pass
 
 import tkinter as tk
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 
 import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
 import yaml
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -36,7 +37,7 @@ from .model.pattern.utils import (
     CAGLIOTI_W_DEFAULT,
     normalize_profile,
 )
-from .runtime_layout import asf_data_path, resource_path
+from .runtime_layout import application_directory, asf_data_path, resource_path
 
 matplotlib.use("TkAgg")
 
@@ -60,6 +61,14 @@ def _safe_double_get(var, field_label: str):
 
 
 class PowderPatternGUI:
+    SAVE_OUTPUT_KEYS = (
+        "txt",
+        "json",
+        "powder_png",
+        "cell_png",
+        "G_csv",
+        "Gstar_csv",
+    )
     LATTICE_FAMILY_KEYS = (
         "manual",
         "cubic",
@@ -107,14 +116,25 @@ class PowderPatternGUI:
     }
     UI_TEXTS = {
         "ru": {
-            "config_frame": "Загрузка кристалла",
-            "select_config": "Конфиг:",
+            "config_frame": "Загрузка данных из списка",
+            "select_config": "Список:",
             "refresh_list": "Обновить список",
+            "add_config_file": "Добавить файл…",
+            "remove_config": "Убрать из списка",
+            "add_config_file_title": "Выберите файл конфигурации",
+            "remove_config_confirm": "Убрать «{name}» из списка?",
+            "config_removed": "«{name}» убран из списка.",
+            "config_added": "Добавлено: {path}",
+            "config_add_failed": "Не удалось добавить:\n{error}",
+            "config_remove_failed": "Не удалось убрать:\n{error}",
+            "config_nothing_selected": "Выберите пункт в списке.",
+            "config_invalid_path": "Файл или папка не найдены:\n{path}",
             "language": "Язык:",
             "crystal_params": "Параметры кристалла",
-            "centering": "Центровка:",
-            "system": "Система:",
-            "name": "Имя:",
+            "centering": "Тип ячейки:",
+            "system": "Сингония:",
+            "name": "Имя файла:",
+            "element_col": "Элемент",
             "a_axis": "a (Å):",
             "b_axis": "b (Å):",
             "c_axis": "c (Å):",
@@ -132,10 +152,28 @@ class PowderPatternGUI:
             "tth_range": "2θ диапазон:",
             "step": "шаг",
             "profile": "Профиль:",
+            "pseudo_voigt_eta": "η (pseudo-Voigt):",
+            "caglioti": "Кальотти U, V, W:",
             "thetam": "θm (град, поляризация):",
             "use_wl2": "Использовать вторую длину волны",
             "generate_pattern": "Рассчитать дифрактограмму",
-            "reset_zoom": "Сбросить приближение",
+            "reset_zoom": "Вернуть исх. масштаб",
+            "plot_area": "Дифрактограмма",
+            "calc_results": "Посчитанные дифрактограммы",
+            "save_to_folder": "Сохранить в папку…",
+            "save_pick_folder": "Выберите папку для сохранения",
+            "save_files_group": "Файлы для сохранения:",
+            "save_file_txt": "Таблица отражений (.txt)",
+            "save_file_json": "Отражения JSON (.json)",
+            "save_file_powder_png": "Дифрактограмма (.png)",
+            "save_file_cell_png": "Схема ячейки (.png)",
+            "save_file_G_csv": "Матрица G (.csv)",
+            "save_file_Gstar_csv": "Матрица G* (.csv)",
+            "save_nothing_selected": "Отметьте хотя бы один тип файла.",
+            "save_no_result_selected": "Выберите дифрактограмму в списке.",
+            "save_success": "Сохранено в:\n{path}",
+            "save_failed": "Не удалось сохранить:\n{error}",
+            "calc_done_message": "Расчёт добавлен в список справа.\nДлины волн: {wl_msg}{ratio_msg}",
             "label_reflection_angles": "Подписи углов 2θ",
             "label_reflection_angles_hkl": "Показать углы и hkl",
             "hover_angle": "2θ = {angle:.3f}°",
@@ -166,14 +204,25 @@ class PowderPatternGUI:
             "window_title": "Расчёт дифрактограммы",
         },
         "en": {
-            "config_frame": "Load Default Crystal",
-            "select_config": "Select config:",
+            "config_frame": "Load data from list",
+            "select_config": "List:",
             "refresh_list": "Refresh list",
+            "add_config_file": "Add file…",
+            "remove_config": "Remove from list",
+            "add_config_file_title": "Select configuration file",
+            "remove_config_confirm": "Remove «{name}» from the list?",
+            "config_removed": "Removed «{name}» from the list.",
+            "config_added": "Added: {path}",
+            "config_add_failed": "Failed to add:\n{error}",
+            "config_remove_failed": "Failed to remove:\n{error}",
+            "config_nothing_selected": "Select an item from the list.",
+            "config_invalid_path": "File or folder not found:\n{path}",
             "language": "Language:",
             "crystal_params": "Crystal Parameters",
-            "centering": "Centering:",
-            "system": "Lattice system:",
-            "name": "Name:",
+            "centering": "Cell type:",
+            "system": "Crystal system:",
+            "name": "File name:",
+            "element_col": "Element",
             "a_axis": "a (Å):",
             "b_axis": "b (Å):",
             "c_axis": "c (Å):",
@@ -191,10 +240,28 @@ class PowderPatternGUI:
             "tth_range": "2θ range:",
             "step": "step",
             "profile": "Profile:",
+            "pseudo_voigt_eta": "η (pseudo-Voigt):",
+            "caglioti": "Caglioti U, V, W:",
             "thetam": "θm (deg, polarization):",
             "use_wl2": "Use second wavelength",
             "generate_pattern": "Calculate diffractogram",
-            "reset_zoom": "Reset Zoom",
+            "reset_zoom": "Restore initial zoom",
+            "plot_area": "Diffractogram",
+            "calc_results": "Calculated patterns",
+            "save_to_folder": "Save to folder…",
+            "save_pick_folder": "Choose folder to save",
+            "save_files_group": "Files to save:",
+            "save_file_txt": "Reflection table (.txt)",
+            "save_file_json": "Reflections JSON (.json)",
+            "save_file_powder_png": "Diffractogram (.png)",
+            "save_file_cell_png": "Unit cell (.png)",
+            "save_file_G_csv": "Metric G (.csv)",
+            "save_file_Gstar_csv": "Metric G* (.csv)",
+            "save_nothing_selected": "Select at least one file type.",
+            "save_no_result_selected": "Select a pattern from the list.",
+            "save_success": "Saved to:\n{path}",
+            "save_failed": "Failed to save:\n{error}",
+            "calc_done_message": "Result added to the list on the right.\nWavelengths: {wl_msg}{ratio_msg}",
             "label_reflection_angles": "Label 2θ angles",
             "label_reflection_angles_hkl": "Show angles and hkl",
             "hover_angle": "2θ = {angle:.3f}°",
@@ -312,6 +379,16 @@ class PowderPatternGUI:
         self._full_xlim = None
         self._full_ylim = None
         self._wl2_fields_frame = None
+        self._eta_entry = None
+        self._profile_combo = None
+        self._plot_outer = None
+        self._plot_aspect = 1.25
+        self._calc_results = []
+        self._selected_calc_index = None
+        self._calc_listbox = None
+        self._save_option_vars = {}
+        self._save_option_state_cache = {}
+        self._plot_graph_frame = None
         self.input_width = 14
         self.input_font = ("TkDefaultFont", 12)
         self.label_font = ("TkDefaultFont", 12)
@@ -368,6 +445,10 @@ class PowderPatternGUI:
         current_profile = self._profile_key()
         label_angles = self.label_angles_var.get()
         label_angles_hkl = self.label_angles_hkl_var.get()
+        selected_calc = self._selected_calc_index
+        self._save_option_state_cache = {
+            k: v.get() for k, v in self._save_option_vars.items()
+        }
         selected_config = (
             self.config_combo.get().strip() if hasattr(self, "config_combo") else ""
         )
@@ -378,8 +459,15 @@ class PowderPatternGUI:
         self.create_widgets()
         self._set_lattice_family_by_key(current_family)
         self._set_profile_by_key(current_profile)
+        self._on_profile_selected()
         self.label_angles_var.set(label_angles)
         self.label_angles_hkl_var.set(label_angles_hkl)
+        self._selected_calc_index = selected_calc
+        self._refresh_calc_results_list()
+        if self._selected_calc_index is not None:
+            self._select_calc_result_index(self._selected_calc_index, redraw=False)
+            if self._calc_results:
+                self._display_calc_result(self._calc_results[self._selected_calc_index])
         self.root.title(self.tr("window_title"))
         self.scan_config_files()
         if selected_config and selected_config in self.config_files:
@@ -412,8 +500,15 @@ class PowderPatternGUI:
 
         scroll_outer = ttk.Frame(main_paned)
         plot_outer = ttk.Frame(main_paned)
-        main_paned.add(scroll_outer, stretch="always", minsize=560)
-        main_paned.add(plot_outer, stretch="always", minsize=280)
+        self._plot_outer = plot_outer
+        main_paned.add(scroll_outer, stretch="always", minsize=440)
+        main_paned.add(plot_outer, stretch="always", minsize=360)
+
+        plot_frame = ttk.LabelFrame(
+            plot_outer, text=self.tr("plot_area"), padding=4
+        )
+        self._plot_graph_frame = plot_frame
+        plot_frame.pack(fill=tk.BOTH, expand=True)
 
         scroll_canvas = tk.Canvas(scroll_outer, highlightthickness=0)
         vsb = ttk.Scrollbar(
@@ -473,12 +568,26 @@ class PowderPatternGUI:
         self.config_combo = ttk.Combobox(
             config_frame, state="readonly", width=self.input_width
         )
-        self.config_combo.grid(row=0, column=1, sticky="w", padx=5, pady=2)
+        self.config_combo.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
         self.config_combo.bind("<<ComboboxSelected>>", self.on_config_select)
+        config_frame.grid_columnconfigure(1, weight=1)
 
         ttk.Button(
             config_frame, text=self.tr("refresh_list"), command=self.scan_config_files
         ).grid(row=0, column=2, padx=5, pady=2)
+
+        config_btns = ttk.Frame(config_frame)
+        config_btns.grid(row=1, column=0, columnspan=3, sticky="w", padx=5, pady=(4, 0))
+        ttk.Button(
+            config_btns,
+            text=self.tr("add_config_file"),
+            command=self._add_config_file_dialog,
+        ).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(
+            config_btns,
+            text=self.tr("remove_config"),
+            command=self._remove_config_from_list,
+        ).pack(side=tk.LEFT)
 
         # Кристаллографические параметры
         crystal_frame = ttk.LabelFrame(
@@ -678,13 +787,35 @@ class PowderPatternGUI:
         ttk.Label(pattern_frame, text=self.tr("profile")).grid(
             row=row, column=0, sticky="e", padx=5, pady=2
         )
-        profile_combo = ttk.Combobox(
+        self._profile_combo = ttk.Combobox(
             pattern_frame,
             textvariable=self.profile_var,
             values=self._profile_labels(),
             width=self.input_width,
         )
-        profile_combo.grid(row=row, column=1, sticky="w", padx=5, pady=2)
+        self._profile_combo.grid(row=row, column=1, sticky="w", padx=5, pady=2)
+        self._profile_combo.bind("<<ComboboxSelected>>", self._on_profile_selected)
+        row += 1
+
+        ttk.Label(pattern_frame, text=self.tr("pseudo_voigt_eta")).grid(
+            row=row, column=0, sticky="e", padx=5, pady=2
+        )
+        self._eta_entry = ttk.Entry(
+            pattern_frame, textvariable=self.eta_var, width=self.input_width
+        )
+        self._eta_entry.grid(row=row, column=1, sticky="w", padx=5, pady=2)
+        row += 1
+
+        ttk.Label(pattern_frame, text=self.tr("caglioti")).grid(
+            row=row, column=0, sticky="e", padx=5, pady=2
+        )
+        caglioti_frame = ttk.Frame(pattern_frame)
+        caglioti_frame.grid(row=row, column=1, sticky="w", padx=5, pady=2)
+        for label, var in (("U", self.U_var), ("V", self.V_var), ("W", self.W_var)):
+            ttk.Label(caglioti_frame, text=label).pack(side=tk.LEFT, padx=(0, 2))
+            ttk.Entry(caglioti_frame, textvariable=var, width=10).pack(
+                side=tk.LEFT, padx=(0, 8)
+            )
         row += 1
 
         ttk.Label(pattern_frame, text=self.tr("thetam")).grid(
@@ -694,6 +825,8 @@ class PowderPatternGUI:
             pattern_frame, textvariable=self.thetam_deg_var, width=self.input_width
         ).grid(row=row, column=1, sticky="w", padx=5, pady=2)
         row += 1
+
+        self._on_profile_selected()
 
         actions_row = ttk.Frame(self.form_container)
         actions_row.pack(pady=10)
@@ -738,14 +871,65 @@ class PowderPatternGUI:
             lang_row, text=self.tr("print_pattern"), command=self._print_pattern
         ).pack(side=tk.LEFT, padx=(12, 0))
 
-        sh = self.root.winfo_screenheight()
-        sw = self.root.winfo_screenwidth()
-        fig_w = max(6.0, min(16.0, (sw - 80) / 100))
-        fig_h = max(5.5, min(9.0, (sh - 220) / 100))
+        fig_h = 6.0
+        fig_w = fig_h * self._plot_aspect
         self.figure = Figure(figsize=(fig_w, fig_h), dpi=100)
         self.ax = self.figure.add_subplot(111)
-        self.canvas = FigureCanvasTkAgg(self.figure, master=plot_outer)
+        self.ax.set_aspect("auto")
+        self.canvas = FigureCanvasTkAgg(self.figure, master=plot_frame)
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        plot_frame.bind("<Configure>", self._resize_plot_figure)
+
+        results_panel = ttk.LabelFrame(
+            plot_outer, text=self.tr("calc_results"), padding=6
+        )
+        results_panel.pack(fill=tk.X, side=tk.BOTTOM, padx=2, pady=(4, 0))
+
+        list_row = ttk.Frame(results_panel)
+        list_row.pack(fill=tk.X, pady=(0, 4))
+        list_scroll = ttk.Scrollbar(list_row, orient=tk.VERTICAL)
+        self._calc_listbox = tk.Listbox(
+            list_row,
+            height=4,
+            exportselection=False,
+            yscrollcommand=list_scroll.set,
+            font=self.input_font,
+        )
+        list_scroll.config(command=self._calc_listbox.yview)
+        self._calc_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        list_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self._calc_listbox.bind("<<ListboxSelect>>", self._on_calc_result_selected)
+
+        save_opts = ttk.LabelFrame(
+            results_panel, text=self.tr("save_files_group"), padding=4
+        )
+        save_opts.pack(fill=tk.X, pady=(0, 4))
+        opts_inner = ttk.Frame(save_opts)
+        opts_inner.pack(fill=tk.X)
+        save_labels = {
+            "txt": "save_file_txt",
+            "json": "save_file_json",
+            "powder_png": "save_file_powder_png",
+            "cell_png": "save_file_cell_png",
+            "G_csv": "save_file_G_csv",
+            "Gstar_csv": "save_file_Gstar_csv",
+        }
+        self._save_option_vars = {}
+        for col, key in enumerate(self.SAVE_OUTPUT_KEYS):
+            var = tk.BooleanVar(
+                value=self._save_option_state_cache.get(key, True)
+            )
+            self._save_option_vars[key] = var
+            ttk.Checkbutton(
+                opts_inner, text=self.tr(save_labels[key]), variable=var
+            ).grid(row=col // 2, column=col % 2, sticky="w", padx=4, pady=1)
+
+        ttk.Button(
+            results_panel,
+            text=self.tr("save_to_folder"),
+            command=self._save_selected_result,
+        ).pack(anchor="e")
+        self._refresh_calc_results_list()
         self._zoom_selector = RectangleSelector(
             self.ax,
             self._on_zoom_select,
@@ -851,9 +1035,30 @@ class PowderPatternGUI:
             self._main_paned.update_idletasks()
             w = self._main_paned.winfo_width()
             if w > 300:
-                left_width = max(560, min(int(w * 0.50), 900))
+                left_width = max(440, min(int(w * 0.38), 680))
                 self._main_paned.sashpos(0, left_width)
+            self._resize_plot_figure()
         except (tk.TclError, AttributeError):
+            pass
+
+    def _resize_plot_figure(self, _event=None):
+        frame = self._plot_graph_frame
+        if frame is None:
+            return
+        try:
+            pw = max(frame.winfo_width() - 12, 200)
+            ph = max(frame.winfo_height() - 36, 160)
+            dpi = self.figure.get_dpi()
+            w_in = pw / dpi
+            h_in = ph / dpi
+            if w_in / h_in < self._plot_aspect:
+                w_in = h_in * self._plot_aspect
+            else:
+                h_in = w_in / self._plot_aspect
+            self.figure.set_size_inches(w_in, h_in, forward=True)
+            self.figure.tight_layout(pad=1.0)
+            self.canvas.draw_idle()
+        except (tk.TclError, AttributeError, ValueError):
             pass
 
     def _toggle_wavelength2_fields(self):
@@ -863,6 +1068,12 @@ class PowderPatternGUI:
             self._wl2_fields_frame.grid()
         else:
             self._wl2_fields_frame.grid_remove()
+
+    def _on_profile_selected(self, _event=None):
+        if self._eta_entry is None:
+            return
+        state = "normal" if self._profile_key() == "pseudo-voigt" else "disabled"
+        self._eta_entry.configure(state=state)
 
     def _create_collapsible_section(self, parent, title: str, expanded: bool = True):
         section = ttk.Frame(parent)
@@ -901,10 +1112,280 @@ class PowderPatternGUI:
         marker = "▼" if content.winfo_manager() else "►"
         btn.configure(text=f"{marker} {key}")
 
+    def _config_repo_root(self) -> str:
+        return os.path.dirname(self.config_dir) or "."
+
+    def _user_config_dir(self) -> str:
+        if getattr(sys, "frozen", False):
+            d = application_directory() / "config"
+            d.mkdir(parents=True, exist_ok=True)
+            return str(d)
+        return self.config_dir
+
+    def _config_list_meta_paths(self):
+        user = self._user_config_dir()
+        return (
+            os.path.join(self.config_dir, "extra_paths.txt"),
+            os.path.join(user, "ignore_list.txt"),
+            os.path.join(user, "list_entries.txt"),
+        )
+
+    @staticmethod
+    def _normalize_config_path(raw: str, base: str) -> str:
+        raw = raw.strip()
+        if not raw:
+            return ""
+        if os.path.isabs(raw):
+            return os.path.normpath(raw)
+        return os.path.normpath(os.path.join(base, raw))
+
+    def _path_for_list_entry_storage(self, path: str) -> str:
+        path = os.path.normpath(os.path.abspath(path))
+        base = self._config_repo_root()
+        try:
+            rel = os.path.relpath(path, base)
+            if not rel.startswith(".."):
+                return rel
+        except ValueError:
+            pass
+        return path
+
+    def _read_path_list_file(self, filepath: str) -> list[str]:
+        if not os.path.isfile(filepath):
+            return []
+        base = self._config_repo_root()
+        out = []
+        with open(filepath, encoding="utf-8") as fh:
+            for line in fh:
+                raw = line.strip()
+                if not raw or raw.startswith("#"):
+                    continue
+                p = self._normalize_config_path(raw, base)
+                if p and (os.path.isfile(p) or os.path.isdir(p)):
+                    out.append(p)
+        return out
+
+    def _load_config_extra_dirs(self):
+        extra_paths_file, _, _ = self._config_list_meta_paths()
+        return self._read_path_list_file(extra_paths_file)
+
+    def _load_list_entries(self):
+        seen = set()
+        entries = []
+        for path in (
+            os.path.join(self._user_config_dir(), "list_entries.txt"),
+            os.path.join(self.config_dir, "list_entries.txt"),
+        ):
+            for p in self._read_path_list_file(path):
+                if p not in seen:
+                    seen.add(p)
+                    entries.append(p)
+        return entries
+
+    def _append_list_entry(self, path: str) -> None:
+        path = os.path.normpath(os.path.abspath(path))
+        if not os.path.isfile(path) and not os.path.isdir(path):
+            raise FileNotFoundError(path)
+        for existing in self._load_list_entries():
+            if os.path.normpath(existing) == path:
+                return
+        user_dir = self._user_config_dir()
+        os.makedirs(user_dir, exist_ok=True)
+        list_file = os.path.join(user_dir, "list_entries.txt")
+        store = self._path_for_list_entry_storage(path)
+        need_newline = os.path.isfile(list_file) and os.path.getsize(list_file) > 0
+        with open(list_file, "a", encoding="utf-8") as fh:
+            if need_newline:
+                fh.write("\n")
+            fh.write(store + "\n")
+
+    def _remove_list_entry_path(self, path: str) -> bool:
+        path = os.path.normpath(os.path.abspath(path))
+        list_file = os.path.join(self._user_config_dir(), "list_entries.txt")
+        if not os.path.isfile(list_file):
+            return False
+        base = self._config_repo_root()
+        kept = []
+        removed = False
+        with open(list_file, encoding="utf-8") as fh:
+            for line in fh:
+                raw = line.strip()
+                if not raw or raw.startswith("#"):
+                    kept.append(line if line.endswith("\n") else line + "\n")
+                    continue
+                p = self._normalize_config_path(raw, base)
+                if p and os.path.normpath(p) == path:
+                    removed = True
+                    continue
+                kept.append(line if line.endswith("\n") else line + "\n")
+        if removed:
+            with open(list_file, "w", encoding="utf-8") as fh:
+                fh.writelines(kept)
+        return removed
+
+    def _load_config_ignore_patterns(self):
+        patterns = []
+        seen = set()
+        user = self._user_config_dir()
+        for path in (
+            os.path.join(self.config_dir, "ignore_list.txt"),
+            os.path.join(user, "ignore_list.txt"),
+        ):
+            if not os.path.isfile(path):
+                continue
+            with open(path, encoding="utf-8") as fh:
+                for line in fh:
+                    raw = line.strip()
+                    if raw and not raw.startswith("#") and raw not in seen:
+                        seen.add(raw)
+                        patterns.append(raw)
+        return patterns
+
+    def _append_ignore_pattern(self, pattern: str) -> None:
+        patterns = self._load_config_ignore_patterns()
+        if pattern in patterns:
+            return
+        user_dir = self._user_config_dir()
+        os.makedirs(user_dir, exist_ok=True)
+        ignore_file = os.path.join(user_dir, "ignore_list.txt")
+        with open(ignore_file, "a", encoding="utf-8") as fh:
+            if os.path.isfile(ignore_file) and os.path.getsize(ignore_file) > 0:
+                fh.write("\n")
+            fh.write(pattern + "\n")
+
+    def _remove_ignore_for_basename(self, basename: str) -> None:
+        """Снять скрытие файла: убрать точные записи basename/stem из ignore_list."""
+        stem = os.path.splitext(basename)[0]
+        ignore_file = os.path.join(self._user_config_dir(), "ignore_list.txt")
+        if not os.path.isfile(ignore_file):
+            return
+        kept = []
+        changed = False
+        with open(ignore_file, encoding="utf-8") as fh:
+            for line in fh:
+                raw = line.strip()
+                if raw and not raw.startswith("#") and raw in (basename, stem):
+                    changed = True
+                    continue
+                kept.append(line if line.endswith("\n") else line + "\n")
+        if changed:
+            with open(ignore_file, "w", encoding="utf-8") as fh:
+                fh.writelines(kept)
+
+    @staticmethod
+    def _config_extensions():
+        return (".txt", ".json", ".yaml", ".yml")
+
+    def _is_config_file(self, path: str) -> bool:
+        return os.path.isfile(path) and path.lower().endswith(self._config_extensions())
+
+    def _register_config_file(self, filepath: str, into: dict) -> None:
+        base = os.path.basename(filepath)
+        ignore_patterns = self._load_config_ignore_patterns()
+        if self._is_config_ignored(base, ignore_patterns):
+            return
+        name = os.path.splitext(base)[0]
+        if name not in into:
+            into[name] = filepath
+
+    def _scan_config_dir(self, config_dir: str, into: dict) -> None:
+        for ext in ("*.txt", "*.json", "*.yaml", "*.yml"):
+            for f in sorted(glob.glob(os.path.join(config_dir, ext))):
+                self._register_config_file(f, into)
+
+    def _add_config_file_dialog(self):
+        path = filedialog.askopenfilename(
+            title=self.tr("add_config_file_title"),
+            filetypes=[
+                ("YAML/JSON", "*.yaml *.yml *.json *.txt"),
+                ("All files", "*.*"),
+            ],
+        )
+        if not path:
+            return
+        if not self._is_config_file(path):
+            messagebox.showerror(
+                self.tr("input_error_title"),
+                self.tr("config_invalid_path").format(path=path),
+            )
+            return
+        try:
+            basename = os.path.basename(path)
+            self._remove_ignore_for_basename(basename)
+            self._append_list_entry(path)
+            self.scan_config_files()
+            stem = os.path.splitext(basename)[0]
+            if stem in self.config_files:
+                self.config_combo.set(stem)
+                self.on_config_select()
+            messagebox.showinfo(
+                self.tr("success_title"),
+                self.tr("config_added").format(path=path),
+            )
+        except OSError as e:
+            messagebox.showerror(
+                self.tr("error_title"),
+                self.tr("config_add_failed").format(error=str(e)),
+            )
+
+    def _remove_config_from_list(self):
+        name = self.config_combo.get().strip()
+        if not name or name not in self.config_files:
+            messagebox.showwarning(
+                self.tr("warning_title"), self.tr("config_nothing_selected")
+            )
+            return
+        if not messagebox.askyesno(
+            self.tr("warning_title"),
+            self.tr("remove_config_confirm").format(name=name),
+        ):
+            return
+        filepath = os.path.normpath(os.path.abspath(self.config_files[name]))
+        basename = os.path.basename(filepath)
+        try:
+            self._remove_list_entry_path(filepath)
+            self._append_ignore_pattern(basename)
+            self.scan_config_files()
+            messagebox.showinfo(
+                self.tr("success_title"),
+                self.tr("config_removed").format(name=name),
+            )
+        except OSError as e:
+            messagebox.showerror(
+                self.tr("error_title"),
+                self.tr("config_remove_failed").format(error=str(e)),
+            )
+
+    @staticmethod
+    def _is_config_ignored(basename: str, patterns) -> bool:
+        stem = os.path.splitext(basename)[0]
+        meta = {
+            "extra_paths.txt",
+            "ignore_list.txt",
+            "list_entries.txt",
+        }
+        if basename in meta:
+            return True
+        for pat in patterns:
+            if fnmatch.fnmatch(basename, pat) or fnmatch.fnmatch(stem, pat):
+                return True
+        return False
+
+    def _config_search_dirs(self):
+        seen = set()
+        dirs = []
+        for d in [self.config_dir, *self._load_config_extra_dirs()]:
+            d = os.path.normpath(d)
+            if d not in seen and os.path.isdir(d):
+                seen.add(d)
+                dirs.append(d)
+        return dirs
+
     def scan_config_files(self):
         self.config_files.clear()
         current = self.config_combo.get().strip()
-        if not os.path.isdir(self.config_dir):
+        search_dirs = self._config_search_dirs()
+        if not search_dirs and not self._load_list_entries():
             messagebox.showwarning(
                 self.tr("warning_title"),
                 self.tr("config_dir_not_found").format(path=self.config_dir),
@@ -912,14 +1393,15 @@ class PowderPatternGUI:
             self.config_combo["values"] = []
             return
 
-        extensions = ["*.txt", "*.json", "*.yaml", "*.yml"]
-        files = []
-        for ext in extensions:
-            files.extend(glob.glob(os.path.join(self.config_dir, ext)))
+        for config_dir in search_dirs:
+            self._scan_config_dir(config_dir, self.config_files)
 
-        for f in files:
-            name = os.path.splitext(os.path.basename(f))[0]
-            self.config_files[name] = f
+        for entry in self._load_list_entries():
+            if os.path.isfile(entry):
+                if self._is_config_file(entry):
+                    self._register_config_file(entry, self.config_files)
+            elif os.path.isdir(entry):
+                self._scan_config_dir(entry, self.config_files)
 
         if self.config_files:
             names = sorted(self.config_files.keys(), key=str.lower)
@@ -949,7 +1431,7 @@ class PowderPatternGUI:
             self.config_combo["values"] = []
             self.config_combo.set("")
 
-    def on_config_select(self, event):
+    def on_config_select(self, event=None):
         selected = self.config_combo.get()
         if not selected or selected not in self.config_files:
             return
@@ -1276,6 +1758,7 @@ class PowderPatternGUI:
         if getattr(self, "_cell_entries", None):
             self._apply_lattice_constraints()
         self._toggle_wavelength2_fields()
+        self._on_profile_selected()
 
     @staticmethod
     def _is_orthogonal_cell_approx_from_values(al, be, ga, atol_deg=0.5) -> bool:
@@ -1420,7 +1903,7 @@ class PowderPatternGUI:
         for w in self._atom_header_labels:
             w.destroy()
         self._atom_header_labels.clear()
-        headers = ["Element", "x", "y", "z"]
+        headers = [self.tr("element_col"), "x", "y", "z"]
         if self.show_biso_var.get():
             headers.append("Biso")
         for col, h in enumerate(headers):
@@ -1664,6 +2147,204 @@ class PowderPatternGUI:
         ann.set_visible(True)
         self.canvas.draw_idle()
 
+    def _format_calc_result_label(self, name: str, wavelengths, wl2_ratio: float) -> str:
+        wl_part = ", ".join(f"{w:.4f} Å" for w in wavelengths)
+        if len(wavelengths) > 1:
+            wl_part += f"; I(λ2)/I(λ1)={wl2_ratio:g}"
+        return f"{name} — {wl_part}"
+
+    def _refresh_calc_results_list(self):
+        if self._calc_listbox is None:
+            return
+        self._calc_listbox.delete(0, tk.END)
+        for item in self._calc_results:
+            self._calc_listbox.insert(tk.END, item["label"])
+
+    def _select_calc_result_index(self, index: int, redraw: bool = True):
+        if self._calc_listbox is None or index is None:
+            return
+        if index < 0 or index >= len(self._calc_results):
+            return
+        self._selected_calc_index = index
+        self._calc_listbox.selection_clear(0, tk.END)
+        self._calc_listbox.selection_set(index)
+        self._calc_listbox.activate(index)
+        if redraw:
+            self._display_calc_result(self._calc_results[index])
+
+    def _on_calc_result_selected(self, _event=None):
+        if self._calc_listbox is None:
+            return
+        sel = self._calc_listbox.curselection()
+        if not sel:
+            return
+        self._select_calc_result_index(int(sel[0]))
+
+    def _get_selected_calc_result(self):
+        if self._selected_calc_index is None:
+            return None
+        if self._selected_calc_index < 0 or self._selected_calc_index >= len(
+            self._calc_results
+        ):
+            return None
+        return self._calc_results[self._selected_calc_index]
+
+    @staticmethod
+    def _hkl_labels_on_curve(patterns, x, y):
+        labels = []
+        seen = set()
+        for pattern in patterns:
+            for hkl, xc, _ in pattern.hkl_labels:
+                key = round(float(xc), 4)
+                if key in seen:
+                    continue
+                seen.add(key)
+                yp = float(np.interp(xc, x, y))
+                labels.append((hkl, float(xc), yp))
+        return labels
+
+    def _display_calc_result(self, result: dict):
+        x = result["x"]
+        y = result["y"]
+        all_reflections = result["all_reflections"]
+        angle_values = sorted(
+            {
+                ref["twotheta"]
+                for ref in all_reflections
+                if x[0] <= ref["twotheta"] <= x[-1]
+            }
+        )
+        self.ax.clear()
+        self._peak_label_artists.clear()
+        self.ax.plot(x, y, linewidth=1.3)
+        self.ax.set_xlabel(self.tr("plot_xlabel"), fontsize=14)
+        self.ax.set_ylabel(self.tr("plot_ylabel"), fontsize=14)
+        self.ax.set_title(self.tr("plot_title"), fontsize=15)
+        self.ax.tick_params(axis="both", labelsize=11)
+        self._configure_twotheta_axis(self.ax)
+        self.ax.grid(True, axis="x", which="major", linewidth=0.6, alpha=0.45)
+        self.ax.grid(True, axis="x", which="minor", linewidth=0.35, alpha=0.25)
+        y_top = float(np.max(y)) if len(y) else 1.0
+        self._hkl_hover_tol = 1.0
+        self._plot_peak_data = self._build_plot_peak_data(all_reflections, x, y)
+        self._hkl_hover_peaks = []
+        if self._hkl_hover_annot is None:
+            self._hkl_hover_annot = self.ax.annotate(
+                "",
+                xy=(0, 0),
+                xytext=(0, 24),
+                textcoords="offset points",
+                ha="center",
+                va="bottom",
+                bbox=dict(boxstyle="round,pad=0.35", fc="wheat", alpha=0.92),
+                fontsize=11,
+                visible=False,
+                zorder=10,
+            )
+            if self._hkl_hover_cid is not None:
+                self.canvas.mpl_disconnect(self._hkl_hover_cid)
+            self._hkl_hover_cid = self.canvas.mpl_connect(
+                "motion_notify_event", self._on_hkl_hover_motion
+            )
+        self.ax.set_ylim(bottom=0.0, top=(y_top * 1.08 if y_top > 0 else 1.0))
+        self._apply_reflection_label_mode()
+        if angle_values:
+            self.ax.vlines(
+                angle_values,
+                [0.0] * len(angle_values),
+                [float(np.interp(a, x, y)) for a in angle_values],
+                colors="gray",
+                linewidth=0.4,
+                alpha=0.35,
+                zorder=2,
+            )
+        self._full_xlim = tuple(self.ax.get_xlim())
+        self._full_ylim = tuple(self.ax.get_ylim())
+        self.figure.tight_layout(pad=1.2)
+        self.canvas.draw()
+
+    def _append_calc_result(
+        self,
+        name: str,
+        patterns,
+        wl2_ratio: float,
+        x,
+        y,
+        all_reflections,
+        wavelengths,
+    ):
+        result = {
+            "label": self._format_calc_result_label(name, wavelengths, wl2_ratio),
+            "name": name,
+            "patterns": patterns,
+            "wl2_ratio": wl2_ratio,
+            "x": x,
+            "y": y,
+            "all_reflections": all_reflections,
+            "wavelengths": list(wavelengths),
+        }
+        self._calc_results.append(result)
+        self._refresh_calc_results_list()
+        self._select_calc_result_index(len(self._calc_results) - 1)
+
+    def _export_calc_result(self, result: dict, dest_dir: str, options: dict) -> None:
+        dest = Path(dest_dir)
+        dest.mkdir(parents=True, exist_ok=True)
+        base_name = result["name"]
+        patterns = result["patterns"]
+        crystal = patterns[0].crystal
+
+        if options.get("txt"):
+            for pattern in patterns:
+                pattern.write_reflections_txt(dest / f"{pattern.name}.txt")
+        if options.get("json"):
+            for pattern in patterns:
+                pattern.write_reflections_json(dest / f"{pattern.name}.json")
+        if options.get("G_csv"):
+            np.savetxt(dest / "G.csv", crystal.G, delimiter=",")
+        if options.get("Gstar_csv"):
+            np.savetxt(dest / "Gstar.csv", crystal.Gstar, delimiter=",")
+        if options.get("cell_png"):
+            crystal.save_image(filename=dest / f"{base_name}.png")
+        if options.get("powder_png"):
+            hkl_plot = self._hkl_labels_on_curve(patterns, result["x"], result["y"])
+            Plot.save_powder_png(
+                dest / f"{base_name}_powder.png",
+                result["x"],
+                result["y"],
+                hkl_plot,
+                base_name,
+            )
+
+    def _save_selected_result(self):
+        result = self._get_selected_calc_result()
+        if result is None:
+            messagebox.showwarning(
+                self.tr("warning_title"), self.tr("save_no_result_selected")
+            )
+            return
+        options = {k: v.get() for k, v in self._save_option_vars.items()}
+        if not any(options.values()):
+            messagebox.showwarning(
+                self.tr("warning_title"), self.tr("save_nothing_selected")
+            )
+            return
+        dest = filedialog.askdirectory(
+            title=self.tr("save_pick_folder"), mustexist=False
+        )
+        if not dest:
+            return
+        try:
+            self._export_calc_result(result, dest, options)
+            messagebox.showinfo(
+                self.tr("success_title"),
+                self.tr("save_success").format(path=dest),
+            )
+        except Exception as e:
+            messagebox.showerror(
+                self.tr("error_title"), self.tr("save_failed").format(error=str(e))
+            )
+
     def generate_pattern(self):
         try:
             atoms_data = self.collect_atoms_from_widgets()
@@ -1825,14 +2506,9 @@ class PowderPatternGUI:
                 )
                 patterns.append(pattern_i)
 
-            run_dir = f"runs/{self.name_var.get()}/"
-            Plot(patterns[0]).plot_curve(path=run_dir)
-            plt.close("all")
-
             x, y = patterns[0].get_pattern_data()
             y_combined = np.array(y, copy=True)
             all_reflections = list(patterns[0].reflections)
-            all_hkl_labels = list(patterns[0].hkl_labels)
             for p in patterns[1:]:
                 xp, yp = p.get_pattern_data()
                 yp_scaled = wl2_ratio * np.asarray(yp, dtype=float)
@@ -1841,64 +2517,17 @@ class PowderPatternGUI:
                 else:
                     y_combined += np.interp(x, xp, yp_scaled)
                 all_reflections.extend(p.reflections)
-                all_hkl_labels.extend(p.hkl_labels)
 
-            angle_values = sorted(
-                {
-                    ref["twotheta"]
-                    for ref in all_reflections
-                    if x[0] <= ref["twotheta"] <= x[-1]
-                }
+            base_name = self.name_var.get().strip() or "pattern"
+            self._append_calc_result(
+                base_name,
+                patterns,
+                wl2_ratio,
+                x,
+                y_combined,
+                all_reflections,
+                wavelengths,
             )
-            self.ax.clear()
-            self._peak_label_artists.clear()
-            self.ax.plot(x, y_combined, linewidth=1.3)
-            self.ax.set_xlabel(self.tr("plot_xlabel"), fontsize=14)
-            self.ax.set_ylabel(self.tr("plot_ylabel"), fontsize=14)
-            self.ax.set_title(self.tr("plot_title"), fontsize=15)
-            self.ax.tick_params(axis="both", labelsize=11)
-            self._configure_twotheta_axis(self.ax)
-            self.ax.grid(True, axis="x", which="major", linewidth=0.6, alpha=0.45)
-            self.ax.grid(True, axis="x", which="minor", linewidth=0.35, alpha=0.25)
-            y_top = float(np.max(y_combined)) if len(y_combined) else 1.0
-            self._hkl_hover_tol = 1.0
-            self._plot_peak_data = self._build_plot_peak_data(
-                all_reflections, x, y_combined
-            )
-            self._hkl_hover_peaks = []
-            self._hkl_hover_annot = self.ax.annotate(
-                "",
-                xy=(0, 0),
-                xytext=(0, 24),
-                textcoords="offset points",
-                ha="center",
-                va="bottom",
-                bbox=dict(boxstyle="round,pad=0.35", fc="wheat", alpha=0.92),
-                fontsize=11,
-                visible=False,
-                zorder=10,
-            )
-            if self._hkl_hover_cid is not None:
-                self.canvas.mpl_disconnect(self._hkl_hover_cid)
-            self._hkl_hover_cid = self.canvas.mpl_connect(
-                "motion_notify_event", self._on_hkl_hover_motion
-            )
-            self.ax.set_ylim(bottom=0.0, top=(y_top * 1.08 if y_top > 0 else 1.0))
-            self._apply_reflection_label_mode()
-            if angle_values:
-                self.ax.vlines(
-                    angle_values,
-                    [0.0] * len(angle_values),
-                    [float(np.interp(a, x, y_combined)) for a in angle_values],
-                    colors="gray",
-                    linewidth=0.4,
-                    alpha=0.35,
-                    zorder=2,
-                )
-            self._full_xlim = tuple(self.ax.get_xlim())
-            self._full_ylim = tuple(self.ax.get_ylim())
-            self.figure.tight_layout(pad=1.2)
-            self.canvas.draw()
             wl_msg = ", ".join(f"{w:.4f} Å" for w in wavelengths)
             ratio_msg = (
                 self.tr("ratio_on_plot").format(ratio=wl2_ratio)
@@ -1907,8 +2536,8 @@ class PowderPatternGUI:
             )
             messagebox.showinfo(
                 self.tr("success_title"),
-                self.tr("success_message").format(
-                    wl_msg=wl_msg, ratio_msg=ratio_msg, run_dir=run_dir
+                self.tr("calc_done_message").format(
+                    wl_msg=wl_msg, ratio_msg=ratio_msg
                 ),
             )
         except Exception as e:

@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import Union
 
@@ -14,27 +13,51 @@ class Plot:
     def __init__(self, powder: PowderPattern):
         self.powder = powder
 
-    def plot_curve(self, path: Union[str, Path] = "."):
-        os.makedirs(path, exist_ok=True)
+    @staticmethod
+    def save_powder_png(
+        filepath: Union[str, Path],
+        twotheta,
+        y,
+        hkl_labels,
+        title: str,
+    ) -> None:
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        fig = plt.figure(figsize=(10, 4))
+        try:
+            plt.plot(twotheta, y, label=title)
+            plt.xlabel("2θ (deg)")
+            plt.ylabel("Intensity")
+            plt.title(title)
+            ax = plt.gca()
+            ax.xaxis.set_major_locator(MultipleLocator(10))
+            ax.xaxis.set_minor_locator(MultipleLocator(1))
+            ax.tick_params(axis="x", which="major", length=6)
+            ax.tick_params(axis="x", which="minor", length=3)
+            for _hkl, x, y_peak in hkl_labels:
+                plt.text(x, y_peak, f"{x:.2f}°", fontsize=6, ha="center", va="bottom")
+            plt.legend()
+            plt.grid(True)
+            fig.savefig(filepath)
+        finally:
+            plt.close(fig)
 
+    def plot_curve(self, path: Union[str, Path] = "."):
         if isinstance(path, str):
             path = Path(path)
-        plt.figure(figsize=(10, 4))
-        plt.plot(self.powder.twotheta, self.powder.ycalc, label=self.powder.name)
-        plt.xlabel("2θ (deg)")
-        plt.ylabel("Intensity")
-        plt.title(self.powder.name)
-        ax = plt.gca()
-        ax.xaxis.set_major_locator(MultipleLocator(10))
-        ax.xaxis.set_minor_locator(MultipleLocator(1))
-        ax.tick_params(axis="x", which="major", length=6)
-        ax.tick_params(axis="x", which="minor", length=3)
-        for hkl, x, y in self.powder.hkl_labels:
-            plt.text(x, y, "".join(map(str, hkl)), fontsize=6)
-        plt.legend()
-        plt.grid(True)
-        plt.savefig(path / f"{self.powder.name}_powder.png")
-
+        path.mkdir(parents=True, exist_ok=True)
+        self.powder.save_outputs(path)
+        hkl_plot = [
+            (hkl, x, y)
+            for hkl, x, y in self.powder.hkl_labels
+        ]
+        self.save_powder_png(
+            path / f"{self.powder.name}_powder.png",
+            self.powder.twotheta,
+            self.powder.ycalc,
+            hkl_plot,
+            self.powder.name,
+        )
         self.powder.crystal.save_image(filename=path / f"{self.powder.name}.png")
 
     def plot_point(self):

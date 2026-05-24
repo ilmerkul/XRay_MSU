@@ -11,6 +11,12 @@ class TestPowderPattern:
     def test_has_reflections(self, bar_pattern: PowderPattern):
         assert len(bar_pattern.reflections) > 0
 
+    def test_reflection_f_atoms_match_full_atoms(self, bar_pattern: PowderPattern):
+        n_atoms = len(bar_pattern.crystal.full_atoms)
+        for ref in bar_pattern.reflections:
+            assert len(ref["f_atoms"]) == n_atoms
+            assert all(isinstance(fv, float) for fv in ref["f_atoms"])
+
     def test_continuous_curve_non_empty(self, bar_pattern: PowderPattern):
         x, y = bar_pattern.get_pattern_data()
         assert len(x) == len(y)

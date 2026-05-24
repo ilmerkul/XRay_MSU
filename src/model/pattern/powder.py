@@ -1,11 +1,11 @@
 import json
-import os
-from typing import Dict
+from pathlib import Path
+from typing import Dict, Optional, Union
 
 import numpy as np
 
 from ..crystal.crystal import Crystal
-from ..crystal.structure import structure_factor
+from ..crystal.structure import atom_f_column_labels, structure_factor
 from .utils import (
     CAGLIOTI_U_DEFAULT,
     CAGLIOTI_V_DEFAULT,
@@ -121,7 +121,7 @@ class PowderPattern:
                     if np.isnan(th):
                         continue
                     twoth = 2 * np.degrees(th)
-                    F, f_temp = structure_factor(
+                    F, f_atoms = structure_factor(
                         self.crystal, (h, k, l_idx), th, self.wavelength
                     )
                     if self.multiplicity_mode == "metric":
@@ -170,7 +170,7 @@ class PowderPattern:
                                 "l": lf,
                                 "p": pf,
                                 "lp": lpf,
-                                "f": f_temp,
+                                "f_atoms": f_atoms,
                                 "F": F,
                                 "intensity": intensity,
                             }
@@ -188,19 +188,14 @@ class PowderPattern:
             ref["intensity_units"] = self.intensity_units
             if self.normalize_intensity:
                 ref["intensity_units"] += " (normalized)"
-        self.save_refs(refs)
         return refs
 
-    def save_refs(self, refs: Dict[str, float]):
-        os.makedirs(f"runs/{self.name}", exist_ok=True)
-
-        if self.save_ref:
-            with open(f"runs/{self.name}/{self.name}.json", "w") as f:
-                json.dump(refs, f, cls=NumpyEncoder)
-
-        with open(
-            f"runs/{self.name}/{self.name}.txt", "w", newline="", encoding="utf-8"
-        ) as f:
+    def write_reflections_txt(self, filepath: Union[str, Path], refs=None) -> None:
+        if refs is None:
+            refs = self.reflections
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        with open(filepath, "w", newline="", encoding="utf-8") as f:
             crystal = self.crystal
             f.write("# Crystal metadata\n")
             f.write(f"# name: {self.name}\n")
@@ -246,6 +241,12 @@ class PowderPattern:
                     f"#   {atom.element}, {x:.6f}, {y:.6f}, {z:.6f}, "
                     f"{atom.occ:.6f}, {atom.Biso:.6f}\n"
                 )
+            f_labels = atom_f_column_labels(crystal.full_atoms)
+            f.write(
+                "# f columns (one per atom in full_atoms, Waas–Kirfel f₀ at this 2θ): "
+                + ", ".join(f_labels)
+                + "\n"
+            )
             f.write("#\n")
 
             # Фиксированная ширина в текстовой таблице: удобно читать глазами.
@@ -256,7 +257,7 @@ class PowderPattern:
                 ("twotheta", 10, "right"),
                 ("mult", 6, "right"),
                 ("l", 9, "right"),
-                ("f", 9, "right"),
+                *[(label, 9, "right") for label in f_labels],
                 ("p", 9, "right"),
                 ("F", 14, "right"),
                 ("F^2", 14, "right"),
@@ -290,7 +291,7 @@ class PowderPattern:
                     f"{ref['twotheta']:.3f}",
                     f"{ref['mult']}",
                     f"{ref['l']:.3f}",
-                    f"{ref['f']:.3f}",
+                    *[f"{fv:.3f}" for fv in ref["f_atoms"]],
                     f"{ref['p']:.3f}",
                     _format_F_tsv(ref["F"]),
                     _format_F_tsv(ref["F"] ** 2),
@@ -299,8 +300,46 @@ class PowderPattern:
                 f.write(_row(row) + "\n")
             f.write(_border() + "\n")
 
-        np.savetxt(f"runs/{self.name}/G.csv", self.crystal.G, delimiter=",")
-        np.savetxt(f"runs/{self.name}/Gstar.csv", self.crystal.Gstar, delimiter=",")
+    def write_reflections_json(self, filepath: Union[str, Path], refs=None) -> None:
+        if refs is None:
+            refs = self.reflections
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        with open(filepath, "w", encoding="utf-8") as f:
+            json.dump(refs, f, cls=NumpyEncoder)
+
+    def write_metric_matrices(self, output_dir: Union[str, Path]) -> None:
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        np.savetxt(output_dir / "G.csv", self.crystal.G, delimiter=",")
+        np.savetxt(output_dir / "Gstar.csv", self.crystal.Gstar, delimiter=",")
+
+    def save_outputs(
+        self,
+        output_dir: Union[str, Path],
+        *,
+        txt: bool = True,
+        json_file: Optional[bool] = None,
+        metrics: bool = True,
+        refs=None,
+    ) -> None:
+        """Запись результатов расчёта в каталог (CLI и ручной экспорт)."""
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        if refs is None:
+            refs = self.reflections
+        if json_file is None:
+            json_file = self.save_ref
+        if txt:
+            self.write_reflections_txt(output_dir / f"{self.name}.txt", refs=refs)
+        if json_file:
+            self.write_reflections_json(output_dir / f"{self.name}.json", refs=refs)
+        if metrics:
+            self.write_metric_matrices(output_dir)
+
+    def save_refs(self, refs: Dict[str, float]):
+        """Совместимость: сохранить в runs/<name>/ (как раньше)."""
+        self.save_outputs(f"runs/{self.name}", refs=refs)
 
     def _convolve(self):
         y = np.zeros_like(self.twotheta)

@@ -1,6 +1,6 @@
 [project]
 name = "xray-msu"
-version = "0.1.0"
+version = "0.1.3"
 description = "Powder XRD simulation: crystal structure → intensities, CLI and Tk GUI"
 readme = "README.md"
 requires-python = ">=3.12"
