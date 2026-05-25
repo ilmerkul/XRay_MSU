@@ -10,7 +10,9 @@ from typing import Any, Optional
 
 if getattr(sys, "frozen", False):
     sys.path.insert(0, sys._MEIPASS)
-    os.chdir(Path(sys.executable).parent)
+    from src.runtime_layout import ensure_runtime_layout
+
+    ensure_runtime_layout()
 else:
     _ROOT = Path(__file__).resolve().parent
     sys.path.insert(0, str(_ROOT))

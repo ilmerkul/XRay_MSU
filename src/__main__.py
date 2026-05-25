@@ -37,7 +37,12 @@ from .model.pattern.utils import (
     CAGLIOTI_W_DEFAULT,
     normalize_profile,
 )
-from .runtime_layout import application_directory, asf_data_path, resource_path
+from .runtime_layout import (
+    application_directory,
+    asf_data_path,
+    ensure_runtime_layout,
+    resource_path,
+)
 
 matplotlib.use("TkAgg")
 
@@ -120,10 +125,10 @@ class PowderPatternGUI:
             "select_config": "Список:",
             "refresh_list": "Обновить список",
             "add_config_file": "Добавить файл…",
-            "remove_config": "Убрать из списка",
+            "remove_config": "Удалить из списка",
             "add_config_file_title": "Выберите файл конфигурации",
-            "remove_config_confirm": "Убрать «{name}» из списка?",
-            "config_removed": "«{name}» убран из списка.",
+            "remove_config_confirm": "Удалить «{name}» из списка?",
+            "config_removed": "«{name}» удалён из списка.",
             "config_added": "Добавлено: {path}",
             "config_add_failed": "Не удалось добавить:\n{error}",
             "config_remove_failed": "Не удалось убрать:\n{error}",
@@ -159,7 +164,7 @@ class PowderPatternGUI:
             "generate_pattern": "Рассчитать дифрактограмму",
             "reset_zoom": "Вернуть исх. масштаб",
             "plot_area": "Дифрактограмма",
-            "calc_results": "Посчитанные дифрактограммы",
+            "calc_results": "Рассчитанные дифрактограммы",
             "save_to_folder": "Сохранить в папку…",
             "save_pick_folder": "Выберите папку для сохранения",
             "save_files_group": "Файлы для сохранения:",
@@ -173,11 +178,15 @@ class PowderPatternGUI:
             "save_no_result_selected": "Выберите дифрактограмму в списке.",
             "save_success": "Сохранено в:\n{path}",
             "save_failed": "Не удалось сохранить:\n{error}",
-            "calc_done_message": "Расчёт добавлен в список справа.\nДлины волн: {wl_msg}{ratio_msg}",
+            "calc_done_message": (
+                "Расчёт добавлен в список справа.\n"
+                "Файлы сохранены в runs/{name}/\n"
+                "Длины волн: {wl_msg}{ratio_msg}"
+            ),
             "label_reflection_angles": "Подписи углов 2θ",
             "label_reflection_angles_hkl": "Показать углы и hkl",
             "hover_angle": "2θ = {angle:.3f}°",
-            "print_pattern": "Печать графика",
+            "print_pattern": "Печать",
             "warning_title": "Предупреждение",
             "error_title": "Ошибка",
             "input_error_title": "Ошибка ввода",
@@ -196,7 +205,7 @@ class PowderPatternGUI:
             "orthogonal_cell_title": "Ортогональная ячейка",
             "orthogonal_cell_warning": "Развёртка P/I/F/C/A/B задаётся в дробях по базису при α≈β≈γ≈90° (куб, тетрагон, орторомб и т.п.). Атомы не разворачиваются.",
             "plot_xlabel": "2θ (град)",
-            "plot_ylabel": "Интенсивность",
+            "plot_ylabel": "Интенсивность, отн.ед.",
             "plot_title": "Дифрактограмма",
             "ratio_on_plot": "\nI(λ2)/I(λ1) = {ratio:g} (на графике)",
             "success_title": "Успех",
@@ -261,7 +270,11 @@ class PowderPatternGUI:
             "save_no_result_selected": "Select a pattern from the list.",
             "save_success": "Saved to:\n{path}",
             "save_failed": "Failed to save:\n{error}",
-            "calc_done_message": "Result added to the list on the right.\nWavelengths: {wl_msg}{ratio_msg}",
+            "calc_done_message": (
+                "Result added to the list on the right.\n"
+                "Files saved under runs/{name}/\n"
+                "Wavelengths: {wl_msg}{ratio_msg}"
+            ),
             "label_reflection_angles": "Label 2θ angles",
             "label_reflection_angles_hkl": "Show angles and hkl",
             "hover_angle": "2θ = {angle:.3f}°",
@@ -284,7 +297,7 @@ class PowderPatternGUI:
             "orthogonal_cell_title": "Orthogonal cell",
             "orthogonal_cell_warning": "P/I/F/C/A/B expansion is defined in fractional shifts for basis with α≈β≈γ≈90° (cubic, tetragonal, orthorhombic, etc.). Atoms are not expanded.",
             "plot_xlabel": "2θ (deg)",
-            "plot_ylabel": "Intensity",
+            "plot_ylabel": "Intensity, rel. units",
             "plot_title": "Diffractogram",
             "ratio_on_plot": "\nI(λ2)/I(λ1) = {ratio:g} (on plot)",
             "success_title": "Success",
@@ -371,7 +384,6 @@ class PowderPatternGUI:
         self._hkl_hover_cid = None
         self._hkl_hover_peaks = None
         self._hkl_hover_annot = None
-        self._hkl_hover_tol = 1.0
         self._plot_peak_data = None
         self._peak_label_artists = []
         self._zoom_selector = None
@@ -474,11 +486,12 @@ class PowderPatternGUI:
             self.config_combo.set(selected_config)
 
     def find_config_dir(self):
+        if getattr(sys, "frozen", False):
+            return str(ensure_runtime_layout())
         rp = resource_path("config")
         if rp and os.path.isdir(rp):
             return rp
-        # PyInstaller onefile: не полагаться только на __file__ (иногда отличается от _MEIPASS).
-        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        if hasattr(sys, "_MEIPASS"):
             meipass_cfg = os.path.join(sys._MEIPASS, "config")
             if os.path.isdir(meipass_cfg):
                 return meipass_cfg
@@ -843,13 +856,13 @@ class PowderPatternGUI:
             options_row,
             text=self.tr("label_reflection_angles"),
             variable=self.label_angles_var,
-            command=self._on_reflection_labels_toggled,
+            command=self._on_label_angles_toggled,
         ).pack(side=tk.LEFT, padx=(0, 12))
         ttk.Checkbutton(
             options_row,
             text=self.tr("label_reflection_angles_hkl"),
             variable=self.label_angles_hkl_var,
-            command=self._on_reflection_labels_toggled,
+            command=self._on_label_angles_hkl_toggled,
         ).pack(side=tk.LEFT)
 
         footer = ttk.Frame(self.form_container)
@@ -1113,21 +1126,19 @@ class PowderPatternGUI:
         btn.configure(text=f"{marker} {key}")
 
     def _config_repo_root(self) -> str:
+        if getattr(sys, "frozen", False):
+            return str(application_directory())
         return os.path.dirname(self.config_dir) or "."
 
     def _user_config_dir(self) -> str:
-        if getattr(sys, "frozen", False):
-            d = application_directory() / "config"
-            d.mkdir(parents=True, exist_ok=True)
-            return str(d)
         return self.config_dir
 
     def _config_list_meta_paths(self):
-        user = self._user_config_dir()
+        d = self._user_config_dir()
         return (
-            os.path.join(self.config_dir, "extra_paths.txt"),
-            os.path.join(user, "ignore_list.txt"),
-            os.path.join(user, "list_entries.txt"),
+            os.path.join(d, "extra_paths.txt"),
+            os.path.join(d, "ignore_list.txt"),
+            os.path.join(d, "list_entries.txt"),
         )
 
     @staticmethod
@@ -2079,8 +2090,9 @@ class PowderPatternGUI:
                     zorder=5,
                 )
                 self._peak_label_artists.append(txt)
+                self._hkl_hover_peaks.append((xc, yp, peak["hover_full"]))
             elif show_angles:
-                self._hkl_hover_peaks.append((xc, yp, peak["hover_hkl"]))
+                self._hkl_hover_peaks.append((xc, yp, peak["hover_full"]))
                 angle_key = round(xc, 3)
                 if angle_key in labeled_angles:
                     continue
@@ -2102,17 +2114,23 @@ class PowderPatternGUI:
                 self._hkl_hover_peaks.append((xc, yp, peak["hover_full"]))
         self.canvas.draw_idle()
 
-    def _on_reflection_labels_toggled(self):
+    def _on_label_angles_toggled(self):
+        if self.label_angles_var.get():
+            self.label_angles_hkl_var.set(False)
         self._apply_reflection_label_mode()
+
+    def _on_label_angles_hkl_toggled(self):
+        if self.label_angles_hkl_var.get():
+            self.label_angles_var.set(False)
+        self._apply_reflection_label_mode()
+
+    def _hover_match_tolerance(self) -> float:
+        x0, x1 = self.ax.get_xlim()
+        return max(0.2, (float(x1) - float(x0)) * 0.015)
 
     def _on_hkl_hover_motion(self, event):
         ann = self._hkl_hover_annot
         if ann is None:
-            return
-        if self.label_angles_hkl_var.get():
-            if ann.get_visible():
-                ann.set_visible(False)
-                self.canvas.draw_idle()
             return
         peaks = self._hkl_hover_peaks
         if not peaks:
@@ -2128,7 +2146,7 @@ class PowderPatternGUI:
         mx = event.xdata
         if mx is None:
             return
-        tol = self._hkl_hover_tol
+        tol = self._hover_match_tolerance()
         best = None
         best_d = tol
         for xc, yp, lab in peaks:
@@ -2225,9 +2243,10 @@ class PowderPatternGUI:
         self.ax.grid(True, axis="x", which="major", linewidth=0.6, alpha=0.45)
         self.ax.grid(True, axis="x", which="minor", linewidth=0.35, alpha=0.25)
         y_top = float(np.max(y)) if len(y) else 1.0
-        self._hkl_hover_tol = 1.0
         self._plot_peak_data = self._build_plot_peak_data(all_reflections, x, y)
         self._hkl_hover_peaks = []
+        x_right = float(x[-1])
+        self.ax.set_xlim(0.0, x_right)
         if self._hkl_hover_annot is None:
             self._hkl_hover_annot = self.ax.annotate(
                 "",
@@ -2247,6 +2266,7 @@ class PowderPatternGUI:
                 "motion_notify_event", self._on_hkl_hover_motion
             )
         self.ax.set_ylim(bottom=0.0, top=(y_top * 1.08 if y_top > 0 else 1.0))
+        self.ax.margins(x=0)
         self._apply_reflection_label_mode()
         if angle_values:
             self.ax.vlines(
@@ -2258,7 +2278,7 @@ class PowderPatternGUI:
                 alpha=0.35,
                 zorder=2,
             )
-        self._full_xlim = tuple(self.ax.get_xlim())
+        self._full_xlim = (0.0, x_right)
         self._full_ylim = tuple(self.ax.get_ylim())
         self.figure.tight_layout(pad=1.2)
         self.canvas.draw()
@@ -2286,6 +2306,21 @@ class PowderPatternGUI:
         self._calc_results.append(result)
         self._refresh_calc_results_list()
         self._select_calc_result_index(len(self._calc_results) - 1)
+
+    def _runs_output_dir(self, base_name: str) -> Path:
+        if getattr(sys, "frozen", False):
+            root = application_directory()
+        else:
+            root = Path.cwd()
+        return root / "runs" / base_name
+
+    def _autosave_calc_result_to_runs(self, result: dict) -> None:
+        options = {key: True for key in self.SAVE_OUTPUT_KEYS}
+        dest = self._runs_output_dir(result["name"])
+        try:
+            self._export_calc_result(result, str(dest), options)
+        except OSError:
+            pass
 
     def _export_calc_result(self, result: dict, dest_dir: str, options: dict) -> None:
         dest = Path(dest_dir)
@@ -2528,6 +2563,7 @@ class PowderPatternGUI:
                 all_reflections,
                 wavelengths,
             )
+            self._autosave_calc_result_to_runs(self._calc_results[-1])
             wl_msg = ", ".join(f"{w:.4f} Å" for w in wavelengths)
             ratio_msg = (
                 self.tr("ratio_on_plot").format(ratio=wl2_ratio)
@@ -2537,7 +2573,9 @@ class PowderPatternGUI:
             messagebox.showinfo(
                 self.tr("success_title"),
                 self.tr("calc_done_message").format(
-                    wl_msg=wl_msg, ratio_msg=ratio_msg
+                    name=base_name,
+                    wl_msg=wl_msg,
+                    ratio_msg=ratio_msg,
                 ),
             )
         except Exception as e:

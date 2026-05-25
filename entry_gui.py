@@ -20,9 +20,9 @@ except (locale.Error, OSError):
 def main() -> None:
     if getattr(sys, "frozen", False):
         sys.path.insert(0, sys._MEIPASS)
-        from src.runtime_layout import ensure_workdir
+        from src.runtime_layout import ensure_runtime_layout
 
-        ensure_workdir()
+        ensure_runtime_layout()
     else:
         root = Path(__file__).resolve().parent
         sys.path.insert(0, str(root))

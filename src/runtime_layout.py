@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Iterable, Optional
@@ -117,3 +118,75 @@ def ensure_workdir() -> None:
             os.chdir(application_directory())
         except OSError:
             pass
+
+
+def bundled_config_dir() -> Optional[Path]:
+    br = bundle_root()
+    if not br:
+        return None
+    p = Path(br) / "config"
+    return p if p.is_dir() else None
+
+
+def _seed_file_if_missing(src: Path, dst: Path) -> None:
+    if dst.exists():
+        return
+    if src.is_file():
+        shutil.copy2(src, dst)
+
+
+def _ensure_extra_paths_lists_runs(config_dir: Path) -> None:
+    path = config_dir / "extra_paths.txt"
+    if not path.is_file():
+        path.write_text(
+            "# Дополнительные папки со структурами (по одной на строку).\n"
+            "runs\n",
+            encoding="utf-8",
+        )
+        return
+    text = path.read_text(encoding="utf-8")
+    has_runs = any(
+        ln.strip() == "runs"
+        for ln in text.splitlines()
+        if ln.strip() and not ln.strip().startswith("#")
+    )
+    if not has_runs:
+        with path.open("a", encoding="utf-8") as fh:
+            if text and not text.endswith("\n"):
+                fh.write("\n")
+            fh.write("runs\n")
+
+
+def ensure_runtime_layout() -> Path:
+    """
+    Frozen: cwd = каталог exe, создать runs/ и config/, скопировать шаблоны из бандла.
+    Dev: вернуть config/ репозитория (без копирования).
+    """
+    if not getattr(sys, "frozen", False):
+        cfg = repository_root() / "config"
+        (repository_root() / "runs").mkdir(parents=True, exist_ok=True)
+        return cfg
+
+    ensure_workdir()
+    app = application_directory()
+    runs_dir = app / "runs"
+    config_dir = app / "config"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    src_cfg = bundled_config_dir()
+    if src_cfg:
+        for item in sorted(src_cfg.iterdir()):
+            if item.is_file():
+                _seed_file_if_missing(item, config_dir / item.name)
+
+    for name in ("ignore_list.txt", "list_entries.txt"):
+        dst = config_dir / name
+        if not dst.is_file():
+            dst.write_text(
+                "# Управляется GUI; строки с # — комментарии.\n",
+                encoding="utf-8",
+            )
+
+    _ensure_extra_paths_lists_runs(config_dir)
+    return config_dir
