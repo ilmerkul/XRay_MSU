@@ -1,79 +1,37 @@
+"""Пространственные группы и симметрические операции (spglib)."""
+
 from typing import List
 
 import numpy as np
 import spglib
 
 from ..atom.atom import Atom
-
-symbol_to_number = {
-    "H": 1,
-    "He": 2,
-    "Li": 3,
-    "Be": 4,
-    "B": 5,
-    "C": 6,
-    "N": 7,
-    "O": 8,
-    "F": 9,
-    "Ne": 10,
-    "Na": 11,
-    "Mg": 12,
-    "Al": 13,
-    "Si": 14,
-    "P": 15,
-    "S": 16,
-    "Cl": 17,
-    "Ar": 18,
-    "K": 19,
-    "Ca": 20,
-    "Sc": 21,
-    "Ti": 22,
-    "V": 23,
-    "Cr": 24,
-    "Mn": 25,
-    "Fe": 26,
-    "Co": 27,
-    "Ni": 28,
-    "Cu": 29,
-    "Zn": 30,
-    "Ga": 31,
-    "Ge": 32,
-    "As": 33,
-    "Se": 34,
-    "Br": 35,
-    "Kr": 36,
-    "Rb": 37,
-    "Sr": 38,
-    "Y": 39,
-    "Zr": 40,
-    "Nb": 41,
-    "Mo": 42,
-    "Tc": 43,
-    "Ru": 44,
-    "Rh": 45,
-    "Pd": 46,
-    "Ag": 47,
-    "Cd": 48,
-    "In": 49,
-    "Sn": 50,
-    "Sb": 51,
-    "Te": 52,
-    "I": 53,
-    "Xe": 54,
-    "Cs": 55,
-    "Ba": 56,
-    # ... можно добавить остальные
-}
+from ..atom.const import symbol_to_number
 
 
 class SpaceGroup:
+    """Пространственная группа, заданная генераторами (R, t)."""
+
     def __init__(self, generators):
+        """Строит группу из списка генераторов симметрии.
+
+        Args:
+            generators: Список пар (матрица поворота, вектор трансляции).
+        """
         self.generators = generators
         self.operations = self.generate_space_group(mod_lattice=False)
         self.lattice_operations = self.generate_space_group(mod_lattice=True)
 
     @staticmethod
     def from_spacegroup_number(number):
+        """Создаёт группу по номеру пространственной группы (International Tables).
+
+        Args:
+            number: Номер пространственной группы (1–230).
+
+        Returns:
+            Объект ``SpaceGroup`` с операциями из базы spglib.
+        """
         spg_type = spglib.get_spacegroup_type(number)
         hall_number = spg_type.hall_number
         print(
@@ -88,6 +46,16 @@ class SpaceGroup:
 
     @staticmethod
     def from_structure(lattice: List[float], atoms: List[Atom], symprec: float = 1e-5):
+        """Определяет симметрию структуры по решётке и атомам.
+
+        Args:
+            lattice: Матрица базисных векторов (3×3).
+            atoms: Список атомов элементарной ячейки.
+            symprec: Допуск для spglib при поиске симметрии.
+
+        Returns:
+            Объект ``SpaceGroup`` с операциями, найденными spglib.
+        """
         positions = [atom.frac for atom in atoms]
         numbers = [symbol_to_number.get(atom.element, 0) for atom in atoms]
 
@@ -100,6 +68,16 @@ class SpaceGroup:
         return SpaceGroup(generators)
 
     def generate_space_group(self, mod_lattice=False, tol=1e-8, max_elements=512):
+        """Замыкает множество генераторов до полной группы симметрии.
+
+        Args:
+            mod_lattice: Если ``True``, не приводить трансляции по mod 1 (решёточные операции).
+            tol: Допуск округления при канонизации элементов.
+            max_elements: Максимальное число элементов группы (защита от переполнения).
+
+        Returns:
+            Список пар (R, t) — все операции группы.
+        """
         if not self.generators:
             dim = 3
         else:
@@ -110,11 +88,29 @@ class SpaceGroup:
         zero = np.zeros(dim)
 
         def frac_part(t, mod_lattice=False):
+            """Возвращает дробную часть трансляции.
+
+            Args:
+                t: Вектор трансляции.
+                mod_lattice: Применять ли mod 1 к компонентам.
+
+            Returns:
+                Вектор трансляции (с mod 1 или без).
+            """
             if not mod_lattice:
                 return t - np.floor(t)
             return t
 
         def canonical(R, t):
+            """Приводит операцию (R, t) к каноническому виду для сравнения.
+
+            Args:
+                R: Матрица поворота.
+                t: Вектор трансляции.
+
+            Returns:
+                Хешируемый кортеж (R_tuple, t_tuple).
+            """
             t_adj = frac_part(t, mod_lattice=mod_lattice)
             decimals = int(-np.log10(tol)) + 1
             R_rounded = np.round(R, decimals)
@@ -125,6 +121,15 @@ class SpaceGroup:
             return (R_tuple, t_tuple)
 
         def compose(tr1, tr2):
+            """Композиция двух операций симметрии.
+
+            Args:
+                tr1: Первая операция (R1, t1).
+                tr2: Вторая операция (R2, t2).
+
+            Returns:
+                Составная операция (R1@R2, R1@t2 + t1).
+            """
             R1, t1 = tr1
             R2, t2 = tr2
             R = R1 @ R2
@@ -133,6 +138,14 @@ class SpaceGroup:
             return (R, t)
 
         def inverse(tr):
+            """Обратная операция симметрии.
+
+            Args:
+                tr: Операция (R, t).
+
+            Returns:
+                Обратная операция (R⁻¹, -R⁻¹@t).
+            """
             R, t = tr
             R_inv = np.linalg.inv(R)
             t_inv = -R_inv @ t
@@ -176,13 +189,32 @@ class SpaceGroup:
 
     @property
     def rotations(self):
+        """Матрицы поворота всех операций группы (без mod решётки).
+
+        Returns:
+            Список матриц 3×3.
+        """
         return [R for R, t in self.operations]
 
     @property
     def translations(self):
+        """Векторы трансляции всех операций группы (без mod решётки).
+
+        Returns:
+            Список векторов длины 3.
+        """
         return [t for R, t in self.operations]
 
     def apply(self, x, mod_lattice=False):
+        """Применяет все операции группы к точке x.
+
+        Args:
+            x: Координаты точки (дробные или декартовы).
+            mod_lattice: Использовать ``lattice_operations`` вместо ``operations``.
+
+        Returns:
+            Список образов точки под каждой операцией.
+        """
         ops = self.operations
         if mod_lattice:
             ops = self.lattice_operations

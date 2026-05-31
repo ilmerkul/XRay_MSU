@@ -1,3 +1,5 @@
+"""Построение и сохранение графиков порошковой дифрактограммы."""
+
 from pathlib import Path
 from typing import Union
 
@@ -10,7 +12,14 @@ from src.model.pattern.powder import PowderPattern
 
 
 class Plot:
+    """Экспорт дифрактограммы и связанных данных на диск."""
+
     def __init__(self, powder: PowderPattern):
+        """Привязывает объект расчёта к построителю графиков.
+
+        Args:
+            powder: Рассчитанная порошковая дифрактограмма.
+        """
         self.powder = powder
 
     @staticmethod
@@ -20,37 +29,74 @@ class Plot:
         y,
         hkl_labels,
         title: str,
+        *,
+        ylabel: str = "Intensity",
+        xlim: tuple[float, float] | None = None,
+        line_color: str = "#0b7285",
+        facecolor: str = "#fafbfc",
     ) -> None:
+        """Сохраняет кривую дифрактограммы в PNG.
+
+        Args:
+            filepath: Путь к выходному файлу.
+            twotheta: Массив углов 2θ (градусы).
+            y: Массив интенсивностей.
+            hkl_labels: Список ``(hkl, x, y_peak)`` для подписей пиков.
+            title: Заголовок графика.
+            ylabel: Подпись оси ординат.
+            xlim: Пределы оси 2θ; по умолчанию от ``twotheta[0]`` до ``twotheta[-1]``.
+            line_color: Цвет кривой.
+            facecolor: Фон рисунка.
+        """
         filepath = Path(filepath)
         filepath.parent.mkdir(parents=True, exist_ok=True)
-        fig = plt.figure(figsize=(10, 4))
+        fig = plt.figure(figsize=(10, 4), facecolor=facecolor)
         try:
-            plt.plot(twotheta, y, label=title)
-            plt.xlabel("2θ (deg)")
-            plt.ylabel("Intensity")
-            plt.title(title)
-            ax = plt.gca()
+            ax = fig.add_subplot(111)
+            ax.set_facecolor(facecolor)
+            ax.plot(twotheta, y, label=title, color=line_color, linewidth=1.2)
+            ax.set_xlabel("2θ (deg)")
+            ax.set_ylabel(ylabel)
+            ax.set_title(title)
+            x0 = float(twotheta[0]) if xlim is None else float(xlim[0])
+            x1 = float(twotheta[-1]) if xlim is None else float(xlim[1])
+            y_arr = np.asarray(y, dtype=float)
+            y_top = float(np.max(y_arr)) if y_arr.size else 1.0
             ax.xaxis.set_major_locator(MultipleLocator(10))
             ax.xaxis.set_minor_locator(MultipleLocator(1))
             ax.tick_params(axis="x", which="major", length=6)
             ax.tick_params(axis="x", which="minor", length=3)
-            for _hkl, x, y_peak in hkl_labels:
-                plt.text(x, y_peak, f"{x:.2f}°", fontsize=6, ha="center", va="bottom")
-            plt.legend()
-            plt.grid(True)
-            fig.savefig(filepath)
+            for _hkl, x_peak, y_peak in hkl_labels:
+                y_top = max(y_top, float(y_peak))
+                ax.text(
+                    x_peak,
+                    y_peak,
+                    f"{x_peak:.2f}°",
+                    fontsize=6,
+                    ha="center",
+                    va="bottom",
+                )
+            ax.legend()
+            ax.grid(True, alpha=0.35)
+            ax.set_autoscale_on(False)
+            ax.set_xlim(x0, x1)
+            ax.set_ylim(0.0, y_top * 1.08 if y_top > 0 else 1.0)
+            ax.margins(0)
+            fig.savefig(filepath, facecolor=facecolor, bbox_inches="tight")
         finally:
             plt.close(fig)
 
     def plot_curve(self, path: Union[str, Path] = "."):
+        """Сохраняет таблицу отражений, метрики G/G* и PNG дифрактограммы и ячейки.
+
+        Args:
+            path: Каталог для выходных файлов.
+        """
         if isinstance(path, str):
             path = Path(path)
         path.mkdir(parents=True, exist_ok=True)
         self.powder.save_outputs(path)
-        hkl_plot = [
-            (hkl, x, y)
-            for hkl, x, y in self.powder.hkl_labels
-        ]
+        hkl_plot = [(hkl, x, y) for hkl, x, y in self.powder.hkl_labels]
         self.save_powder_png(
             path / f"{self.powder.name}_powder.png",
             self.powder.twotheta,
@@ -61,6 +107,7 @@ class Plot:
         self.powder.crystal.save_image(filename=path / f"{self.powder.name}.png")
 
     def plot_point(self):
+        """Демонстрация подгонки параметров (синтетические «экспериментальные» данные)."""
         import scipy.optimize
 
         y_exp_synth = self.powder.ycalc + np.random.normal(
@@ -124,6 +171,19 @@ class Plot:
         wavelength,
         profile="pvoigt",
     ):
+        """Невязка для leastsq: разность эксперимента и расчётной кривой.
+
+        Args:
+            params: ``[scale, U, V, W, eta, a]`` — подгоняемые параметры.
+            twotheta_exp: Углы 2θ эксперимента.
+            y_exp: Экспериментальные интенсивности.
+            crystal_template: Шаблон кристалла (копируется и масштабируется).
+            wavelength: Длина волны (Å).
+            profile: Имя профиля пика.
+
+        Returns:
+            Массив невязок ``y_exp - y_calc``.
+        """
         scale, U, V, W, eta, a = params
         crystal_copy = crystal_template.copy()
         crystal_copy.a = a

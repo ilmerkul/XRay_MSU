@@ -5,7 +5,11 @@ from typing import Dict, Optional, Union
 import numpy as np
 
 from ..crystal.crystal import Crystal
-from ..crystal.structure import atom_f_column_labels, structure_factor
+from ..crystal.structure import (
+    atom_f_element_labels,
+    f_values_by_element,
+    structure_factor,
+)
 from .utils import (
     CAGLIOTI_U_DEFAULT,
     CAGLIOTI_V_DEFAULT,
@@ -23,7 +27,15 @@ from .utils import (
 
 
 def _format_F_tsv(F: complex, eps: float = 1e-9) -> str:
-    """Строка для TSV: при F≈0 — «0», иначе компактно без -0.000j."""
+    """Форматирует комплексный F для TSV-таблицы.
+
+    Args:
+        F: Структурный фактор.
+        eps: Порог, ниже которого F считается нулём.
+
+    Returns:
+        Строка: ``0``, вещественная часть, мнимая или ``a+bj`` без ``-0.000j``.
+    """
     z = complex(F)
     if abs(z) < eps:
         return "0"
@@ -36,6 +48,8 @@ def _format_F_tsv(F: complex, eps: float = 1e-9) -> str:
 
 
 class PowderPattern:
+    """Расчёт порошковой дифрактограммы: отражения, свёртка профилей, экспорт."""
+
     def __init__(
         self,
         name: str,
@@ -58,7 +72,38 @@ class PowderPattern:
         multiplicity_mode: str = "symmetry",
         multiplicity_metric_rtol: float = 1e-7,
         multiplicity_metric_atol: float = 1e-12,
+        local: bool = True,
+        reflections: Optional[list] = None,
     ):
+        """Создаёт расчёт дифрактограммы и сразу вычисляет отражения и кривую.
+
+        Args:
+            name: Имя расчёта (для файлов).
+            crystal: Объект кристалла.
+            wavelength: Длина волны (Å).
+            twotheta_range: ``[start, end, step]`` для сетки 2θ (градусы).
+            thetam_deg: Угол θ_m поляризации (градусы).
+            U: Параметр U Кальотти.
+            V: Параметр V Кальотти.
+            W: Параметр W Кальотти.
+            scale: Общий масштаб интенсивности.
+            profile: Имя профиля пика (``bar``, ``gaussian``, …).
+            eta: Доля Lorentz в pseudo-Voigt.
+            bg_poly: Коэффициенты полинома фона (по умолчанию нулевой).
+            intensity_units: Метка единиц интенсивности.
+            normalize_intensity: Нормировать ли пики к ``intensity_max_value``.
+            intensity_max_value: Максимум после нормализации.
+            save_ref: Сохранять ли JSON (legacy, см. ``save_outputs``).
+            intensity_min: Порог отсечения слабых отражений.
+            multiplicity_mode: ``symmetry`` или ``metric``.
+            multiplicity_metric_rtol: rtol для метрической кратности.
+            multiplicity_metric_atol: atol для метрической кратности.
+            local: ``True`` — f из Waas–Kirfel; ``False`` — xraylib (extra).
+            reflections: Готовый список отражений (без повторного перебора hkl).
+
+        Raises:
+            ValueError: Если ``multiplicity_mode`` не ``symmetry`` и не ``metric``.
+        """
         self.name = name
         self.crystal = crystal
         self.wavelength = wavelength
@@ -89,11 +134,24 @@ class PowderPattern:
         self.multiplicity_mode = _mm
         self.multiplicity_metric_rtol = multiplicity_metric_rtol
         self.multiplicity_metric_atol = multiplicity_metric_atol
+        self.local = local
 
-        self.reflections = self._generate_reflections(d_min=self.wavelength / 2.0)
+        self.reflections = (
+            reflections
+            if reflections is not None
+            else self._generate_reflections(d_min=self.wavelength / 2.0)
+        )
         self.ycalc, self.hkl_labels = self._convolve()
 
     def _generate_reflections(self, d_min):
+        """Строит список отражений с d ≥ d_min и вычисляет их интенсивности.
+
+        Args:
+            d_min: Минимальное межплоскостное расстояние (Å).
+
+        Returns:
+            Список словарей с полями hkl, d, twotheta, mult, F, intensity и др.
+        """
         Gstar = self.crystal.Gstar
         eigvals = np.linalg.eigvalsh(Gstar)
         lambda_min_star = np.min(eigvals)
@@ -106,6 +164,13 @@ class PowderPattern:
 
         refs = []
         orbits = set()
+        metric_orbit_map = None
+        if self.multiplicity_mode == "metric":
+            metric_orbit_map = self.crystal.build_metric_orbit_map(
+                max_index,
+                rtol=self.multiplicity_metric_rtol,
+                atol=self.multiplicity_metric_atol,
+            )
         for h in range(-max_index, max_index + 1):
             for k in range(-max_index, max_index + 1):
                 for l_idx in range(-max_index, max_index + 1):
@@ -122,15 +187,19 @@ class PowderPattern:
                         continue
                     twoth = 2 * np.degrees(th)
                     F, f_atoms = structure_factor(
-                        self.crystal, (h, k, l_idx), th, self.wavelength
+                        self.crystal,
+                        (h, k, l_idx),
+                        th,
+                        self.wavelength,
+                        local=self.local,
                     )
                     if self.multiplicity_mode == "metric":
-                        mult, hkl_group = self.crystal.multiplicity_metric(
-                            (h, k, l_idx),
-                            max_index,
-                            rtol=self.multiplicity_metric_rtol,
-                            atol=self.multiplicity_metric_atol,
-                        )
+                        hkl_t = Crystal.hkl2tuple((h, k, l_idx))
+                        orbit_entry = metric_orbit_map.get(hkl_t)
+                        if orbit_entry is None:
+                            continue
+                        mult, hkl_group_fs = orbit_entry
+                        hkl_group = set(hkl_group_fs)
                     else:
                         mult, hkl_group = self.crystal.multiplicity((h, k, l_idx))
                     orbits.update(hkl_group)
@@ -159,6 +228,10 @@ class PowderPattern:
                     lf = l_factor(twotheta_deg=twoth)
                     pf = p_factor(twotheta_deg=twoth, thetam_deg=self.thetam_deg)
                     lpf = lf * pf
+                    fwhm_rad = caglioti_fwhm(
+                        np.radians(twoth / 2), self.U, self.V, self.W
+                    )
+                    fwhm_deg = float(np.degrees(fwhm_rad))
                     intensity = self.scale * mult * lpf * np.abs(F) ** 2
                     if intensity >= self.intensity_min:
                         refs.append(
@@ -170,7 +243,11 @@ class PowderPattern:
                                 "l": lf,
                                 "p": pf,
                                 "lp": lpf,
+                                "fwhm": fwhm_deg,
                                 "f_atoms": f_atoms,
+                                "f_by_element": f_values_by_element(
+                                    f_atoms, self.crystal.full_atoms
+                                ),
                                 "F": F,
                                 "intensity": intensity,
                             }
@@ -191,6 +268,12 @@ class PowderPattern:
         return refs
 
     def write_reflections_txt(self, filepath: Union[str, Path], refs=None) -> None:
+        """Записывает таблицу отражений в текстовый файл с метаданными.
+
+        Args:
+            filepath: Путь к выходному ``.txt`` файлу.
+            refs: Список отражений; по умолчанию ``self.reflections``.
+        """
         if refs is None:
             refs = self.reflections
         filepath = Path(filepath)
@@ -241,9 +324,9 @@ class PowderPattern:
                     f"#   {atom.element}, {x:.6f}, {y:.6f}, {z:.6f}, "
                     f"{atom.occ:.6f}, {atom.Biso:.6f}\n"
                 )
-            f_labels = atom_f_column_labels(crystal.full_atoms)
+            f_labels = atom_f_element_labels(crystal.full_atoms)
             f.write(
-                "# f columns (one per atom in full_atoms, Waas–Kirfel f₀ at this 2θ): "
+                "# f columns (one per element type, f₀ at this 2θ): "
                 + ", ".join(f_labels)
                 + "\n"
             )
@@ -252,26 +335,30 @@ class PowderPattern:
             # Фиксированная ширина в текстовой таблице: удобно читать глазами.
             cols = [
                 ("n", 4, "right"),
+                ("twotheta", 10, "right"),
                 ("hkl", 9, "left"),
                 ("d", 9, "right"),
-                ("twotheta", 10, "right"),
                 ("mult", 6, "right"),
+                ("fwhm", 9, "right"),
                 ("l", 9, "right"),
-                *[(label, 9, "right") for label in f_labels],
                 ("p", 9, "right"),
+                *[(label, 9, "right") for label in f_labels],
                 ("F", 14, "right"),
                 ("F^2", 14, "right"),
                 ("intensity", 11, "right"),
             ]
 
             def _fmt(value, width, align):
+                """Форматирует ячейку таблицы с выравниванием."""
                 text = str(value)
                 return text.ljust(width) if align == "left" else text.rjust(width)
 
             def _border():
+                """Возвращает строку-разделитель ASCII-таблицы."""
                 return "+" + "+".join("-" * (width + 2) for _, width, _ in cols) + "+"
 
             def _row(values):
+                """Форматирует одну строку таблицы."""
                 cells = [
                     _fmt(value, width, align)
                     for value, (_, width, align) in zip(values, cols)
@@ -284,15 +371,20 @@ class PowderPattern:
 
             for i, ref in enumerate(refs[::-1], start=1):
                 hkl = ref["hkl"]
+                f_map = ref.get("f_by_element") or {}
                 row = [
                     f"{i}",
+                    f"{ref['twotheta']:.3f}",
                     f"{hkl[0]} {hkl[1]} {hkl[2]}",
                     f"{ref['d']:.3f}",
-                    f"{ref['twotheta']:.3f}",
                     f"{ref['mult']}",
+                    f"{ref.get('fwhm', 0.0):.3f}",
                     f"{ref['l']:.3f}",
-                    *[f"{fv:.3f}" for fv in ref["f_atoms"]],
                     f"{ref['p']:.3f}",
+                    *[
+                        f"{f_map.get(label.removeprefix('f_'), 0.0):.3f}"
+                        for label in f_labels
+                    ],
                     _format_F_tsv(ref["F"]),
                     _format_F_tsv(ref["F"] ** 2),
                     f"{ref['intensity']:.3f}",
@@ -301,6 +393,12 @@ class PowderPattern:
             f.write(_border() + "\n")
 
     def write_reflections_json(self, filepath: Union[str, Path], refs=None) -> None:
+        """Сохраняет список отражений в JSON.
+
+        Args:
+            filepath: Путь к выходному ``.json`` файлу.
+            refs: Список отражений; по умолчанию ``self.reflections``.
+        """
         if refs is None:
             refs = self.reflections
         filepath = Path(filepath)
@@ -309,6 +407,11 @@ class PowderPattern:
             json.dump(refs, f, cls=NumpyEncoder)
 
     def write_metric_matrices(self, output_dir: Union[str, Path]) -> None:
+        """Сохраняет матрицы G и G* в CSV.
+
+        Args:
+            output_dir: Каталог для ``G.csv`` и ``Gstar.csv``.
+        """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         np.savetxt(output_dir / "G.csv", self.crystal.G, delimiter=",")
@@ -323,13 +426,21 @@ class PowderPattern:
         metrics: bool = True,
         refs=None,
     ) -> None:
-        """Запись результатов расчёта в каталог (CLI и ручной экспорт)."""
+        """Записывает результаты расчёта в каталог (CLI и ручной экспорт).
+
+        Args:
+            output_dir: Целевой каталог.
+            txt: Сохранять ли таблицу ``.txt``.
+            json_file: Сохранять ли ``.json``; по умолчанию — ``save_ref``.
+            metrics: Сохранять ли ``G.csv`` и ``Gstar.csv``.
+            refs: Список отражений; по умолчанию ``self.reflections``.
+        """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         if refs is None:
             refs = self.reflections
         if json_file is None:
-            json_file = self.save_ref
+            json_file = False
         if txt:
             self.write_reflections_txt(output_dir / f"{self.name}.txt", refs=refs)
         if json_file:
@@ -338,10 +449,31 @@ class PowderPattern:
             self.write_metric_matrices(output_dir)
 
     def save_refs(self, refs: Dict[str, float]):
-        """Совместимость: сохранить в runs/<name>/ (как раньше)."""
+        """Сохраняет результаты в ``runs/<name>/`` (обратная совместимость).
+
+        Args:
+            refs: Словарь отражений или метаданных для экспорта.
+        """
         self.save_outputs(f"runs/{self.name}", refs=refs)
 
+    _PROFILE_WINDOW_FWHM = 6.0
+    _PROFILE_MIN_HALF_WIDTH_DEG = 0.25
+
+    def _profile_window_slice(self, centre: float, fwhm_deg: float) -> slice:
+        """Индексный срез сетки 2θ вокруг центра пика (без лишних точек)."""
+        half = max(
+            self._PROFILE_WINDOW_FWHM * fwhm_deg, self._PROFILE_MIN_HALF_WIDTH_DEG
+        )
+        lo = int(np.searchsorted(self.twotheta, centre - half, side="left"))
+        hi = int(np.searchsorted(self.twotheta, centre + half, side="right"))
+        return slice(max(lo, 0), min(hi, len(self.twotheta)))
+
     def _convolve(self):
+        """Сворачивает профили пиков на сетке 2θ и добавляет фон.
+
+        Returns:
+            Кортеж ``(ycalc, hkl_labels)`` — кривая и метки пиков для графика.
+        """
         y = np.zeros_like(self.twotheta)
         peak_dict = {}
 
@@ -360,14 +492,19 @@ class PowderPattern:
                 idx = np.argmin(np.abs(self.twotheta - centre))
                 bar[idx] = 1
                 y_new = intensity * bar
-            elif self.profile == "gaussian":
-                y_new = intensity * gaussian(self.twotheta, centre, fwhm_deg)
-            elif self.profile == "lorentzian":
-                y_new = intensity * lorentzian(self.twotheta, centre, fwhm_deg)
             else:
-                y_new = intensity * pseudo_voigt(
-                    self.twotheta, centre, fwhm_deg, self.eta
-                )
+                win = self._profile_window_slice(centre, fwhm_deg)
+                x_win = self.twotheta[win]
+                if x_win.size == 0:
+                    continue
+                if self.profile == "gaussian":
+                    profile = gaussian(x_win, centre, fwhm_deg)
+                elif self.profile == "lorentzian":
+                    profile = lorentzian(x_win, centre, fwhm_deg)
+                else:
+                    profile = pseudo_voigt(x_win, centre, fwhm_deg, self.eta)
+                y_new = np.zeros_like(self.twotheta)
+                y_new[win] = intensity * profile
 
             y += y_new
 
@@ -397,14 +534,39 @@ class PowderPattern:
         bg = np.polyval(self.bg_poly, self.twotheta)
         return y + bg, hkl_labels
 
-    def generate_pattern(self):
-        self.reflections = self._generate_reflections(d_min=self.wavelength / 2.0)
+    def recalculate_curve(self) -> None:
+        """Пересчитывает только свёртку профилей на текущей сетке 2θ."""
         self.ycalc, self.hkl_labels = self._convolve()
 
+    def set_twotheta_range(self, twotheta_range) -> None:
+        """Меняет сетку 2θ и пересчитывает кривую без нового списка отражений."""
+        self.twotheta = np.arange(
+            twotheta_range[0], twotheta_range[1], twotheta_range[2]
+        )
+        self.recalculate_curve()
+
+    def generate_pattern(self):
+        """Пересчитывает отражения и свёрнутую кривую (после изменения параметров)."""
+        self.reflections = self._generate_reflections(d_min=self.wavelength / 2.0)
+        self.recalculate_curve()
+
     def get_pattern_data(self):
+        """Возвращает сетку 2θ и рассчитанную интенсивность.
+
+        Returns:
+            Кортеж ``(twotheta, ycalc)``.
+        """
         return self.twotheta, self.ycalc
 
     def set_params(self, **kwargs):
+        """Устанавливает атрибуты экземпляра по именам ключей.
+
+        Args:
+            **kwargs: Имена и значения существующих атрибутов.
+
+        Raises:
+            AttributeError: Если атрибут с таким именем не существует.
+        """
         for key, value in kwargs.items():
             if hasattr(self, key):
                 setattr(self, key, value)

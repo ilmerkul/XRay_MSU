@@ -4,7 +4,7 @@
 # Системные библиотеки Tcl/Tk должны совпадать с тем, с чем слинкован _tkinter вашего Python.
 #   sudo apt-get update && sudo apt-get install -y python3-tk
 # Если libtcl9*.so => not found и в apt нет libtcl9*: см. packaging/check_linux_tkinter_ldd.py и pyproject [tool.uv].
-# Кратко: sudo apt install python3-tk; rm -rf .venv; uv sync --group dev  (нужен системный Python ≥ requires-python)
+# Кратко: sudo apt install python3-tk; rm -rf .venv; uv sync --extra dev  (нужен системный Python ≥ requires-python)
 #
 # Использование из корня репозитория:
 #   chmod +x packaging/build-ubuntu.sh
@@ -23,8 +23,8 @@ cd "$REPO_ROOT"
 
 run_gui() {
   if command -v uv >/dev/null 2>&1; then
-    uv run --group dev python "$SCRIPT_DIR/check_linux_tkinter_ldd.py"
-    uv run --group dev pyinstaller "$SCRIPT_DIR/xray-msu-gui.spec" --noconfirm
+    uv run --extra dev python "$SCRIPT_DIR/check_linux_tkinter_ldd.py"
+    uv run --extra dev pyinstaller "$SCRIPT_DIR/xray-msu-gui.spec" --noconfirm
   else
     python3 "$SCRIPT_DIR/check_linux_tkinter_ldd.py"
     python3 -m PyInstaller "$SCRIPT_DIR/xray-msu-gui.spec" --noconfirm
@@ -33,14 +33,14 @@ run_gui() {
 
 run_cli() {
   if command -v uv >/dev/null 2>&1; then
-    uv run --group dev pyinstaller "$SCRIPT_DIR/xray-msu-cli.spec" --noconfirm
+    uv run --extra dev pyinstaller "$SCRIPT_DIR/xray-msu-cli.spec" --noconfirm
   else
     python3 -m PyInstaller "$SCRIPT_DIR/xray-msu-cli.spec" --noconfirm
   fi
 }
 
 if command -v uv >/dev/null 2>&1; then
-  uv sync --group dev
+  uv sync --extra dev
 else
   python3 -m pip install -q "pyinstaller>=6.6.0"
 fi

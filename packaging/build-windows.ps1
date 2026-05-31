@@ -20,8 +20,8 @@ function Invoke-Build {
     param([string]$SpecFile)
     $specPath = Join-Path $PSScriptRoot $SpecFile
     if (Get-Command uv -ErrorAction SilentlyContinue) {
-        & uv sync --group dev
-        & uv run --group dev pyinstaller $specPath --noconfirm
+        & uv sync --extra dev
+        & uv run --extra dev pyinstaller $specPath --noconfirm
     }
     elseif (Get-Command py -ErrorAction SilentlyContinue) {
         & py -m pip install -q "pyinstaller>=6.6.0"

@@ -15,6 +15,8 @@ datas = [
 
 hiddenimports = [
     "src",
+    "src.__main__",
+    "src.cli",
     "src.runtime_layout",
     "src.model.atom.atom",
     "src.model.crystal.crystal",
@@ -29,6 +31,8 @@ hiddenimports += [
     "spglib",
     "yaml",
     "omegaconf",
+    "questionary",
+    "prompt_toolkit",
     "matplotlib.backends.backend_agg",
     "PIL",
     "scipy",
@@ -44,7 +48,7 @@ hiddenimports += [
 ]
 
 a = Analysis(
-    [str(ROOT / "entry_cli.py")],
+    [str(ROOT / "src" / "__main__.py")],
     pathex=[str(ROOT)],
     binaries=[],
     datas=datas,

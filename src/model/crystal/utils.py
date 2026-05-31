@@ -7,7 +7,17 @@ from ..atom.atom import Atom
 
 
 def canonical_frac(x, symprec: float = 1e-5) -> np.ndarray:
-    """Дробные координаты в [0, 1); границы при symprec схлопываются в 0."""
+    """Приводит дробные координаты к каноническому виду в [0, 1).
+
+    Границы при ``symprec`` схлопываются в 0.
+
+    Args:
+        x: Дробные координаты (скаляр или массив).
+        symprec: Допуск для схлопывания границ 0 и 1.
+
+    Returns:
+        Массив координат в диапазоне [0, 1).
+    """
     x = np.mod(np.asarray(x, dtype=float), 1.0)
     x = np.where(x < symprec, 0.0, x)
     x = np.where(x > 1.0 - symprec, 0.0, x)
@@ -15,12 +25,18 @@ def canonical_frac(x, symprec: float = 1e-5) -> np.ndarray:
 
 
 def bravais_centering_translations(kind: str) -> List[tuple]:
-    """
-    Векторы центрирования в долях базисных векторов (a,b,c) для ортогональной
-    конвенциональной ячейки (α=β=γ=90°): кубическая, тетрагональная, орторомбическая.
+    """Возвращает векторы центрирования Браве для ортогональной ячейки.
 
-    P — примитивная; I — объёмно-центрированная (BCC); F — гранецентрированная (FCC);
-    C — базоцентрированная (грань ab); A — грань bc; B — грань ac.
+    Векторы задаются в долях базисных векторов (a, b, c) при α=β=γ=90°.
+
+    Args:
+        kind: Тип центрирования: P, I, F, C, A или B.
+
+    Returns:
+        Список кортежей (tx, ty, tz) — сдвиги в долях ячейки.
+
+    Raises:
+        ValueError: Если тип центрирования не распознан.
     """
     k = kind.strip().upper()
     if k == "P":
@@ -48,9 +64,15 @@ def bravais_centering_translations(kind: str) -> List[tuple]:
 def expand_atoms_bravais_centering(
     atoms: List[Atom], kind: str, symprec: float = 1e-5
 ) -> List[Atom]:
-    """
-    Для каждого входного атома добавляет копии по векторам центрирования,
-    удаляет дубликаты (тот же элемент и дробные координаты с периодом 1).
+    """Разворачивает атомы по векторам центрирования Браве.
+
+    Args:
+        atoms: Список атомов элементарной ячейки.
+        kind: Тип центрирования (P, I, F, C, A, B или none).
+        symprec: Допуск при сравнении дробных координат.
+
+    Returns:
+        Расширенный список атомов без дубликатов (один элемент + одна позиция).
     """
     k = kind.strip().upper()
     if k in ("", "NONE"):
@@ -87,12 +109,30 @@ def expand_atoms_bravais_centering(
 def expand_atoms_cubic_centering(
     atoms: List[Atom], kind: str, symprec: float = 1e-5
 ) -> List[Atom]:
-    """Совместимость: то же, что expand_atoms_bravais_centering."""
+    """Разворачивает атомы по центрированию (алиас ``expand_atoms_bravais_centering``).
+
+    Args:
+        atoms: Список атомов элементарной ячейки.
+        kind: Тип центрирования.
+        symprec: Допуск при сравнении координат.
+
+    Returns:
+        Расширенный список атомов.
+    """
     return expand_atoms_bravais_centering(atoms, kind, symprec=symprec)
 
 
 def frac_periodic_allclose(a, b, atol: float = 1e-5) -> bool:
-    """Сравнение дробных координат с периодом 1 (0 и 1 — одна точка)."""
+    """Сравнивает дробные координаты с учётом периодичности 1.
+
+    Args:
+        a: Первая координата (массив).
+        b: Вторая координата (массив).
+        atol: Абсолютный допуск по каждой компоненте.
+
+    Returns:
+        ``True``, если координаты эквивалентны с периодом 1.
+    """
     a = np.asarray(a, dtype=float)
     b = np.asarray(b, dtype=float)
     d = np.abs(a - b)
@@ -101,6 +141,15 @@ def frac_periodic_allclose(a, b, atol: float = 1e-5) -> bool:
 
 
 def generate_hkl_by_layer(n, include_zero=False):
+    """Генерирует n индексов Миллера, упорядоченных по возрастанию h²+k²+l².
+
+    Args:
+        n: Число требуемых отражений.
+        include_zero: Включать ли отражение (0, 0, 0).
+
+    Returns:
+        Список кортежей (h, k, l) длины не более ``n``.
+    """
     result = []
     s = 0
     while len(result) < n:

@@ -38,7 +38,7 @@ help: ## Показать цели
 	@echo ""
 	@echo "  make install   — зависимости: uv sync или pip install -e ."
 	@echo "  make sync      — то же, что install"
-	@echo "  make run       — расчёт и график: entry_cli.py (конфиг внутри скрипта)"
+	@echo "  make run       — расчёт и график: python -m src --cli"
 	@echo "  make gui       — GUI: python -m src"
 	@echo "  make lint      — ruff check"
 	@echo "  make format    — ruff format"
@@ -67,14 +67,14 @@ ifeq ($(HAS_UV),yes)
 else
 	cd "$(ROOT)" && $(PYTHON) -m pip install \
 		"numpy>=2.4.2" "matplotlib>=3.10.8" "scipy>=1.17.1" "omegaconf>=2.3.0" \
-		"spglib>=2.7.0" "xraylib>=4.2.1" "ruff>=0.15.9" "customtkinter>=5.2.2" "pre-commit>=4.5.1"
+		"spglib>=2.7.0" "ruff>=0.15.9" "customtkinter>=5.2.2" "pre-commit>=4.5.1"
 endif
 
 run: ## Пайплайн порошковой дифракции (OmegaConf + Plot)
 ifeq ($(HAS_UV),yes)
-	cd "$(ROOT)" && uv run python entry_cli.py
+	cd "$(ROOT)" && uv run --extra cli python -m src --cli
 else
-	cd "$(ROOT)" && $(PYTHON) entry_cli.py
+	cd "$(ROOT)" && $(PYTHON) -m src --cli
 endif
 
 gui: ## Окно Tk / matplotlib (пакет src)
@@ -86,26 +86,26 @@ endif
 
 lint: ## Проверка стиля (ruff)
 ifeq ($(HAS_UV),yes)
-	cd "$(ROOT)" && uv run ruff check src entry_cli.py entry_gui.py tests/unit
+	cd "$(ROOT)" && uv run ruff check src tests/unit
 else
-	cd "$(ROOT)" && $(PYTHON) -m ruff check src entry_cli.py entry_gui.py tests/unit
+	cd "$(ROOT)" && $(PYTHON) -m ruff check src tests/unit
 endif
 
 check: lint test ## lint + pytest
 
 test: ## Юнит- и интеграционные тесты (pytest)
 ifeq ($(HAS_UV),yes)
-	cd "$(ROOT)" && uv sync --group dev
-	cd "$(ROOT)" && uv run --group dev pytest tests/unit -q
+	cd "$(ROOT)" && uv sync --extra dev
+	cd "$(ROOT)" && uv run --extra dev pytest tests/unit -q
 else
 	cd "$(ROOT)" && $(PYTHON) -m pytest tests/unit -q
 endif
 
 format: ## Форматирование (ruff format)
 ifeq ($(HAS_UV),yes)
-	cd "$(ROOT)" && uv run ruff format src entry_cli.py entry_gui.py tests/unit
+	cd "$(ROOT)" && uv run ruff format src tests/unit
 else
-	cd "$(ROOT)" && $(PYTHON) -m ruff format src entry_cli.py entry_gui.py tests/unit
+	cd "$(ROOT)" && $(PYTHON) -m ruff format src tests/unit
 endif
 
 clean: ## Кэши Python и ruff
@@ -156,11 +156,11 @@ ifeq ($(IS_WIN),yes)
 	cd "$(ROOT)" && powershell.exe -NoProfile -ExecutionPolicy Bypass -File "packaging/build-windows.ps1" -Target gui
 else
 ifeq ($(HAS_UV),yes)
-	cd "$(ROOT)" && uv sync --group dev
+	cd "$(ROOT)" && uv sync --extra dev
 ifeq ($(shell uname -s),Linux)
-	cd "$(ROOT)" && uv run --group dev python packaging/check_linux_tkinter_ldd.py
+	cd "$(ROOT)" && uv run --extra dev python packaging/check_linux_tkinter_ldd.py
 endif
-	cd "$(ROOT)" && PYINSTALLER_SPEC_ROOT="$(ROOT)" uv run --group dev pyinstaller packaging/xray-msu-gui.spec --noconfirm
+	cd "$(ROOT)" && PYINSTALLER_SPEC_ROOT="$(ROOT)" uv run --extra dev pyinstaller packaging/xray-msu-gui.spec --noconfirm
 else
 	cd "$(ROOT)" && $(PYTHON) -m pip install -q "pyinstaller>=6.6.0"
 ifeq ($(shell uname -s),Linux)
@@ -175,8 +175,8 @@ ifeq ($(IS_WIN),yes)
 	cd "$(ROOT)" && powershell.exe -NoProfile -ExecutionPolicy Bypass -File "packaging/build-windows.ps1" -Target cli
 else
 ifeq ($(HAS_UV),yes)
-	cd "$(ROOT)" && uv sync --group dev
-	cd "$(ROOT)" && PYINSTALLER_SPEC_ROOT="$(ROOT)" uv run --group dev pyinstaller packaging/xray-msu-cli.spec --noconfirm
+	cd "$(ROOT)" && uv sync --extra dev
+	cd "$(ROOT)" && PYINSTALLER_SPEC_ROOT="$(ROOT)" uv run --extra dev pyinstaller packaging/xray-msu-cli.spec --noconfirm
 else
 	cd "$(ROOT)" && $(PYTHON) -m pip install -q "pyinstaller>=6.6.0"
 	cd "$(ROOT)" && PYINSTALLER_SPEC_ROOT="$(ROOT)" $(PYTHON) -m PyInstaller packaging/xray-msu-cli.spec --noconfirm

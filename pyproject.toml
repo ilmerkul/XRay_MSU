@@ -1,23 +1,32 @@
 [project]
 name = "xray-msu"
-version = "0.1.4"
+version = "0.1.5"
 description = "Powder XRD simulation: crystal structure → intensities, CLI and Tk GUI"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "customtkinter>=5.2.2",
     "matplotlib>=3.10.8",
     "numpy>=2.4.2",
     "omegaconf>=2.3.0",
-    "pre-commit>=4.5.1",
-    "ruff>=0.15.9",
     "scipy>=1.17.1",
     "spglib>=2.7.0",
-    "xraylib>=4.2.1",
 ]
 
-[dependency-groups]
-dev = ["pyinstaller>=6.6.0", "pytest>=8.0.0"]
+[project.optional-dependencies]
+xraylib = ["xraylib>=4.2.1"]
+dev = [
+    "isort>=8.0.1",
+    "pre-commit>=4.6.0",
+    "pyinstaller>=6.19.0",
+    "pytest>=9.0.3",
+    "ruff>=0.15.15",
+]
+cli = [
+    "questionary>=2.1.1",
+]
+gui = [
+    "customtkinter>=5.2.2",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit"]

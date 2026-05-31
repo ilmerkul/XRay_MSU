@@ -4,121 +4,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from ..atom.atom import Atom, AtomicScatteringFactor
+from ..atom.const import default_colors
 from ..group.space import SpaceGroup
 from .utils import canonical_frac, frac_periodic_allclose
 
-default_colors = {
-    "H": "white",
-    "C": "#505050",
-    "N": "#3050F8",
-    "O": "#FF0D0D",
-    "F": "#90E050",
-    "Cl": "#1FF01F",
-    "Br": "#A62929",
-    "I": "#940094",
-    "He": "#D9FFFF",
-    "Ne": "#030404",
-    "Ar": "#80C1E9",
-    "Kr": "#5CB8D1",
-    "Xe": "#429EB0",
-    "P": "#FF8000",
-    "S": "#FFFF30",
-    "B": "#FFB5B5",
-    "Li": "#B22222",
-    "Na": "#AB5CF2",
-    "Mg": "#8AFF00",
-    "Al": "#BFA6A6",
-    "Si": "#F0C8A0",
-    "K": "#8F40D4",
-    "Ca": "#3DFF00",
-    "Sc": "#E6E6E6",
-    "Ti": "#BFC2C7",
-    "Cr": "#8A99C7",
-    "Mn": "#9C7AC7",
-    "Fe": "#E06633",
-    "Co": "#F090A0",
-    "Ni": "#50D050",
-    "Cu": "#C88033",
-    "Zn": "#7D80B0",
-    "Ga": "#C28F8F",
-    "Ge": "#668F8F",
-    "As": "#BD80E3",
-    "Se": "#FFA100",
-    "Rb": "#702EB0",
-    "Sr": "#00FF00",
-    "Y": "#94FFFF",
-    "Zr": "#94E0E0",
-    "Nb": "#73C2C2",
-    "Mo": "#54B5B5",
-    "Tc": "#3B9E9E",
-    "Ru": "#248F8F",
-    "Rh": "#0A7D8C",
-    "Pd": "#006985",
-    "Ag": "#C0C0C0",
-    "Cd": "#FFD98F",
-    "In": "#A67573",
-    "Sn": "#668080",
-    "Sb": "#9E63B5",
-    "Te": "#D47A4D",
-    "Cs": "#57178F",
-    "Ba": "#00A900",
-    "La": "#70D4D4",
-    "Ce": "#FFFFC7",
-    "Pr": "#D9FFC7",
-    "Nd": "#C7FFC7",
-    "Pm": "#A3FFC7",
-    "Sm": "#8FFFC7",
-    "Eu": "#61FFC7",
-    "Gd": "#45FFC7",
-    "Tb": "#30FFC7",
-    "Dy": "#1FFFC7",
-    "Ho": "#00FF9C",
-    "Er": "#00E675",
-    "Tm": "#00D452",
-    "Yb": "#00BF38",
-    "Lu": "#00AB24",
-    "Hf": "#4DC2FF",
-    "Ta": "#4DA6FF",
-    "W": "#4D94FF",
-    "Re": "#267DFF",
-    "Os": "#2666FF",
-    "Ir": "#175CFF",
-    "Pt": "#D0D0E0",
-    "Au": "#FFD123",
-    "Hg": "#B8B8D0",
-    "Tl": "#A6544D",
-    "Pb": "#575961",
-    "Bi": "#9E4FB5",
-    "Po": "#CC5C99",
-    "At": "#754F45",
-    "Rn": "#428296",
-    "Fr": "#420066",
-    "Ra": "#007D00",
-    "Ac": "#70ABAB",
-    "Th": "#00BAFF",
-    "Pa": "#00A1FF",
-    "U": "#008FFF",
-    "Np": "#0080FF",
-    "Pu": "#006BFF",
-    "Am": "#545CF2",
-    "Cm": "#785CE3",
-    "Bk": "#8A4FE3",
-    "Cf": "#A136D4",
-    "Es": "#B31FD4",
-    "Fm": "#B31FBA",
-    "Md": "#B30DA6",
-    "No": "#BD0D87",
-    "Lr": "#C70066",
-    "Rf": "#CC0059",
-    "Db": "#D1004F",
-    "Sg": "#D90045",
-    "Bh": "#E00038",
-    "Hs": "#E6002E",
-    "Mt": "#EB0026",
-}
-
 
 class Crystal:
+    """Кристаллическая структура: решётка, атомы и пространственная группа."""
+
     def __init__(
         self,
         a: float,
@@ -133,6 +26,24 @@ class Crystal:
         symprec: float = 1e-5,
         spacegroup: SpaceGroup = None,
     ):
+        """Создаёт кристалл и разворачивает атомы по симметрии.
+
+        Args:
+            a: Параметр решётки a (Å).
+            b: Параметр решётки b (Å).
+            c: Параметр решётки c (Å).
+            alpha: Угол α (градусы).
+            beta: Угол β (градусы).
+            gamma: Угол γ (градусы).
+            asf: Таблица атомных факторов f₀.
+            spacegroup_number: Номер пространственной группы (1–230).
+            atoms: Атомы элементарной ячейки.
+            symprec: Допуск для определения симметрии.
+            spacegroup: Готовый объект ``SpaceGroup`` (альтернатива номеру).
+
+        Raises:
+            ValueError: Если не заданы ни ``spacegroup``, ни ``spacegroup_number``, ни атомы.
+        """
         self.asf = asf
 
         self.a = a
@@ -167,6 +78,19 @@ class Crystal:
 
     @staticmethod
     def lattice_to_matrix(a, b, c, alpha, beta, gamma):
+        """Строит матрицу базисных векторов решётки в декартовых координатах.
+
+        Args:
+            a: Длина вектора a (Å).
+            b: Длина вектора b (Å).
+            c: Длина вектора c (Å).
+            alpha: Угол между b и c (градусы).
+            beta: Угол между a и c (градусы).
+            gamma: Угол между a и b (градусы).
+
+        Returns:
+            Массив 3×3: строки — векторы a, b, c.
+        """
         alpha = np.radians(alpha)
         beta = np.radians(beta)
         gamma = np.radians(gamma)
@@ -184,6 +108,7 @@ class Crystal:
         return np.array([a_vec, b_vec, c_vec])
 
     def _compute_metrics(self):
+        """Вычисляет метрический тензор G, объём V и обратный тензор G*."""
         ca = np.cos(self.alpha)
         cb = np.cos(self.beta)
         cg = np.cos(self.gamma)
@@ -203,6 +128,14 @@ class Crystal:
         self.Gstar = np.linalg.inv(self.G)
 
     def _generate_full_atoms(self, symprec: float = 1e-5) -> List[Atom]:
+        """Разворачивает атомы элементарной ячейки по операциям пространственной группы.
+
+        Args:
+            symprec: Допуск при сравнении эквивалентных позиций.
+
+        Returns:
+            Отсортированный список уникальных атомов ``full_atoms``.
+        """
         full_atoms = []
 
         for atom in self.atoms:
@@ -237,6 +170,14 @@ class Crystal:
         return full_atoms
 
     def d_spacing(self, hkl):
+        """Вычисляет межплоскостное расстояние d для индексов (hkl).
+
+        Args:
+            hkl: Индексы Миллера.
+
+        Returns:
+            Расстояние d (Å) или ``inf``, если 1/d² ≤ 0.
+        """
         h = np.array(hkl, dtype=float)
         invd2 = np.dot(h, np.dot(self.Gstar, h))
         if invd2 <= 0:
@@ -244,6 +185,11 @@ class Crystal:
         return 1.0 / np.sqrt(invd2)
 
     def copy(self):
+        """Создаёт независимую копию кристалла с теми же параметрами.
+
+        Returns:
+            Новый объект ``Crystal``.
+        """
         atoms_copy = [atom.copy() for atom in self.atoms]
         spacegroup_copy = SpaceGroup(self.spacegroup.generators)
         return Crystal(
@@ -260,9 +206,25 @@ class Crystal:
 
     @staticmethod
     def hkl2tuple(hkl):
+        """Округляет индексы Миллера до целых и возвращает кортеж.
+
+        Args:
+            hkl: Индексы (h, k, l).
+
+        Returns:
+            Кортеж целых (h, k, l).
+        """
         return tuple(int(round(x)) for x in hkl)
 
     def multiplicity(self, hkl):
+        """Кратность отражения по симметрии обратной решётки.
+
+        Args:
+            hkl: Индексы Миллера.
+
+        Returns:
+            Кортеж ``(число эквивалентных hkl, множество эквивалентных индексов)``.
+        """
         hkl = np.array(hkl, dtype=float)
         orbits = set()
         for R in self.rotations:
@@ -273,25 +235,23 @@ class Crystal:
         return len(orbits), orbits
 
     def invd2_hkl(self, hkl):
-        """1/d² = hᵀ G* h для целочисленных (или вещественных) Миллера."""
+        """Вычисляет 1/d² = hᵀ G* h для индексов Миллера.
+
+        Args:
+            hkl: Индексы (h, k, l).
+
+        Returns:
+            Значение 1/d² (Å⁻²).
+        """
         h = np.array(hkl, dtype=float)
         return float(np.dot(h, np.dot(self.Gstar, h)))
 
-    def multiplicity_metric(
-        self, hkl, max_index: int, rtol: float = 1e-7, atol: float = 1e-12
-    ):
-        """
-        Кратность и «орбита» через перебор: все целые (h',k',l') в кубе
-        [-max_index, max_index]³ с тем же 1/d² (в пределах rtol/atol), кроме (0,0,0).
-
-        Не совпадает с кристаллографической кратностью, если на одной сфере в
-        обратном пространстве лежат отражения с разными |F| (случайные вырождения).
-        """
-        target = self.invd2_hkl(hkl)
-        if target <= 0:
-            return 1, {Crystal.hkl2tuple(hkl)}
-        scale = max(target, 1.0)
-        orbits = set()
+    def _metric_hkl_invd2_cube(
+        self, max_index: int
+    ) -> tuple[list[tuple[int, int, int]], np.ndarray]:
+        """Список hkl и 1/d² для всех ненулевых индексов в кубе перебора."""
+        hkls: list[tuple[int, int, int]] = []
+        invd2s: list[float] = []
         for hp in range(-max_index, max_index + 1):
             for kp in range(-max_index, max_index + 1):
                 for lp in range(-max_index, max_index + 1):
@@ -300,8 +260,70 @@ class Crystal:
                     m = self.invd2_hkl((hp, kp, lp))
                     if m <= 0:
                         continue
-                    if np.isclose(m, target, rtol=rtol, atol=atol * scale):
-                        orbits.add(Crystal.hkl2tuple((hp, kp, lp)))
+                    hkls.append(Crystal.hkl2tuple((hp, kp, lp)))
+                    invd2s.append(m)
+        return hkls, np.asarray(invd2s, dtype=float)
+
+    def build_metric_orbit_map(
+        self,
+        max_index: int,
+        rtol: float = 1e-7,
+        atol: float = 1e-12,
+    ) -> dict[tuple[int, int, int], tuple[int, frozenset[tuple[int, int, int]]]]:
+        """Предвычисляет метрические орбиты для всего куба индексов (один проход).
+
+        Returns:
+            Словарь ``hkl -> (кратность, frozenset орбиты)``.
+        """
+        hkls, invd2s = self._metric_hkl_invd2_cube(max_index)
+        if not hkls:
+            return {}
+
+        orbit_map: dict[
+            tuple[int, int, int], tuple[int, frozenset[tuple[int, int, int]]]
+        ] = {}
+        assigned: set[tuple[int, int, int]] = set()
+        for seed, target in zip(hkls, invd2s, strict=True):
+            if seed in assigned:
+                continue
+            scale = max(float(target), 1.0)
+            mask = np.isclose(invd2s, target, rtol=rtol, atol=atol * scale)
+            orbit = frozenset(hkls[i] for i in np.flatnonzero(mask))
+            if not orbit:
+                orbit = frozenset({seed})
+            mult = len(orbit)
+            for h in orbit:
+                orbit_map[h] = (mult, orbit)
+            assigned.update(orbit)
+        return orbit_map
+
+    def multiplicity_metric(
+        self, hkl, max_index: int, rtol: float = 1e-7, atol: float = 1e-12
+    ):
+        """Кратность отражения по совпадению 1/d² (метрическая орбита).
+
+        Перебирает целые (h', k', l') в кубе [-max_index, max_index]³ с тем же
+        1/d² (в пределах rtol/atol). Может не совпадать с кристаллографической
+        кратностью при вырожденных сферах в обратном пространстве.
+
+        Args:
+            hkl: Индексы Миллера.
+            max_index: Полуразмер куба перебора индексов.
+            rtol: Относительный допуск сравнения 1/d².
+            atol: Абсолютный допуск (масштабируется по target).
+
+        Returns:
+            Кортеж ``(кратность, множество эквивалентных hkl)``.
+        """
+        target = self.invd2_hkl(hkl)
+        if target <= 0:
+            return 1, {Crystal.hkl2tuple(hkl)}
+        hkls, invd2s = self._metric_hkl_invd2_cube(max_index)
+        if not hkls:
+            return 1, {Crystal.hkl2tuple(hkl)}
+        scale = max(target, 1.0)
+        mask = np.isclose(invd2s, target, rtol=rtol, atol=atol * scale)
+        orbits = {hkls[i] for i in np.flatnonzero(mask)}
         if not orbits:
             return 1, {Crystal.hkl2tuple(hkl)}
         return len(orbits), orbits
@@ -316,6 +338,17 @@ class Crystal:
         dpi=100,
         show_labels=True,
     ):
+        """Сохраняет 3D-изображение структуры и элементарной ячейки в PNG.
+
+        Args:
+            filename: Путь к выходному файлу.
+            view: Углы обзора (elev, azim) для 3D-осей.
+            element_colors: Дополнительная палитра цветов элементов.
+            atom_scale: Масштаб маркеров атомов.
+            show_cell: Рисовать ли рёбра элементарной ячейки.
+            dpi: Разрешение сохраняемого изображения.
+            show_labels: Подписывать ли дробные координаты атомов.
+        """
         if element_colors is not None:
             default_colors.update(element_colors)
         colors = default_colors

@@ -2,20 +2,92 @@ from math import pi, sin
 from typing import List, Tuple
 
 import numpy as np
-import xraylib
 
 from ..crystal.crystal import Crystal
 
 
 def _f_scalar_for_output(f_total) -> float:
-    """Скаляр f для таблицы: вещественный f₀ или |f| при комплексном f."""
+    """Преобразует атомный фактор в скаляр для вывода в таблицу.
+
+    Args:
+        f_total: Вещественный f₀ или комплексный f = f₀ + f' + i f''.
+
+    Returns:
+        Вещественная часть или модуль комплексного значения.
+    """
     if isinstance(f_total, complex):
         return float(abs(f_total))
     return float(f_total)
 
 
+def _atomic_f_xraylib(symbol: str, s_val: float, wavelength: float) -> complex:
+    """Атомный f через xraylib (f₀ + f' + i f'').
+
+    Args:
+        symbol: Символ элемента.
+        s_val: sin(θ)/λ (Å⁻¹).
+        wavelength: Длина волны (Å).
+
+    Raises:
+        ImportError: Если пакет xraylib не установлен.
+    """
+    try:
+        import xraylib
+    except ImportError as e:
+        raise ImportError(
+            "Для --no-local нужен пакет xraylib: uv sync --extra xraylib"
+        ) from e
+
+    z = xraylib.SymbolToAtomicNumber(symbol)
+    f0 = xraylib.FF_Rayl(z, s_val)
+    energy_keV = 12.398 / wavelength
+    f_prime = xraylib.Fi(z, energy_keV)
+    f_double_prime = xraylib.Fii(z, energy_keV)
+    return f0 + f_prime + 1j * f_double_prime
+
+
+def atom_f_element_labels(atoms) -> List[str]:
+    """Имена столбцов f_<Element> — по одному на тип элемента.
+
+    Args:
+        atoms: Список атомов (обычно ``crystal.full_atoms``).
+
+    Returns:
+        Уникальные метки в порядке первого появления элемента.
+    """
+    seen: List[str] = []
+    for atom in atoms:
+        if atom.element not in seen:
+            seen.append(atom.element)
+    return [f"f_{elem}" for elem in seen]
+
+
+def f_values_by_element(f_atoms: List[float], atoms) -> dict[str, float]:
+    """Сопоставляет f_j первому атому каждого типа элемента.
+
+    Args:
+        f_atoms: Значения f по ``full_atoms``.
+        atoms: Список атомов в том же порядке.
+
+    Returns:
+        Словарь ``element -> f`` (без дублирования по позициям).
+    """
+    out: dict[str, float] = {}
+    for fv, atom in zip(f_atoms, atoms):
+        if atom.element not in out:
+            out[atom.element] = fv
+    return out
+
+
 def atom_f_column_labels(atoms) -> List[str]:
-    """Имена столбцов f_<Element>_<n> в порядке full_atoms."""
+    """Формирует имена столбцов f_<Element>_<n> для таблицы отражений.
+
+    Args:
+        atoms: Список атомов (обычно ``crystal.full_atoms``).
+
+    Returns:
+        Метки столбцов в порядке атомов.
+    """
     counts = {}
     labels = []
     for atom in atoms:
@@ -32,54 +104,57 @@ def structure_factor(
     wavelength: float,
     local: bool = True,
 ):
-    """
-    Вычисляет структурный фактор F(hkl) с учётом аномальной дисперсии.
+    """Вычисляет структурный фактор F(hkl) с учётом аномальной дисперсии.
 
-    Параметры
-    ----------
-    crystal : Crystal
-        Объект кристалла с полным списком атомов (full_atoms).
-    hkl : tuple
-        Индексы Миллера (h, k, l).
-    th : float
-        Угол Брэгга в радианах.
-    wavelength : float
-        Длина волны рентгеновского излучения (в тех же единицах, что и длина волны).
+    Args:
+        crystal: Кристалл с заполненным ``full_atoms``.
+        hkl: Индексы Миллера (h, k, l).
+        th: Угол Брэгга в радианах.
+        wavelength: Длина волны рентгеновского излучения (Å).
+        local: Если ``True``, таблица Waas–Kirfel; иначе xraylib (extra).
 
-    Возвращает
-    -------
-    F : complex
-        Структурный фактор F = Σ occ * (f0 + f' + i f'') * T * exp(2πi (h·x))
-    f_atoms : list of float
-        Атомные амплитуды f_j (по одной на каждый атом full_atoms, в том же порядке).
+    Returns:
+        Кортеж ``(F, f_atoms)``, где ``F`` — комплексный структурный фактор,
+        ``f_atoms`` — список скalarных f_j по каждому атому ``full_atoms``.
     """
     s_val = sin(th) / wavelength
+    theta_deg = th * 180 / pi
+    hkl_arr = np.asarray(hkl, dtype=float)
+    f_cache: dict[str, float | complex] = {}
     F = 0.0 + 0.0j
     f_atoms: List[float] = []
 
     for atom in crystal.full_atoms:
         if local:
-            f_total = crystal.asf.get_f0_from_theta_lambda(
-                symbol=atom.element, theta_deg=th * 180 / pi, lambda_ang=wavelength
-            )
+            elem = atom.element
+            if elem not in f_cache:
+                f_cache[elem] = crystal.asf.get_f0_from_theta_lambda(
+                    symbol=elem, theta_deg=theta_deg, lambda_ang=wavelength
+                )
+            f_total = f_cache[elem]
         else:
-            z = xraylib.SymbolToAtomicNumber(atom.element)
-            f0 = xraylib.FF_Rayl(z, s_val)
-            energy_keV = 12.398 / wavelength
-            f_prime = xraylib.Fi(z, energy_keV)
-            f_double_prime = xraylib.Fii(z, energy_keV)
-            f_total = f0 + f_prime + 1j * f_double_prime
+            f_total = _atomic_f_xraylib(atom.element, s_val, wavelength)
 
         f_atoms.append(_f_scalar_for_output(f_total))
 
         T = np.exp(-atom.Biso * s_val**2)
-        phase = 2j * np.pi * np.dot(hkl, atom.frac)
+        phase = 2j * np.pi * np.dot(hkl_arr, atom.frac)
         F += atom.occ * f_total * T * np.exp(phase)
 
     return F, f_atoms
 
 
 def theta(hkl, crystal, wavelength):
+    """Вычисляет угол Брэгга для отражения (hkl).
+
+    Args:
+        hkl: Индексы Миллера.
+        crystal: Объект кристалла.
+        wavelength: Длина волны (Å).
+
+    Returns:
+        Угол Брэгга в радианах или ``nan``, если отражение недостижимо.
+    """
     d = crystal.d_spacing(hkl)
     if d == np.inf:
         return np.nan

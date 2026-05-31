@@ -14,27 +14,46 @@ ASF_MIN_BYTES = 4096
 
 
 def bundle_root() -> Optional[str]:
+    """Возвращает корень бандла PyInstaller или None в режиме разработки.
+
+    Returns:
+        Путь к ``sys._MEIPASS`` для frozen-приложения; иначе ``None``.
+    """
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
         return sys._MEIPASS
     return None
 
 
 def application_directory() -> Path:
-    """Каталог рядом с .exe / бинарником (frozen) или текущий cwd (dev)."""
+    """Возвращает каталог приложения.
+
+    Returns:
+        Каталог рядом с исполняемым файлом (frozen) или текущий рабочий каталог (dev).
+    """
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
     return Path.cwd()
 
 
 def repository_root() -> Path:
-    """Корень репозитория (каталог с data/, config/)."""
+    """Возвращает корень репозитория.
+
+    Returns:
+        Каталог, содержащий ``data/`` и ``config/``.
+    """
     return Path(__file__).resolve().parent.parent
 
 
 def resource_path(*parts: str) -> Optional[str]:
-    """
-    Файл или каталог: сначала внутри бандла PyInstaller, затем рядом с бинарником,
-    иначе None (вызывающий может откатиться на относительный путь от cwd).
+    """Ищет файл или каталог среди ресурсов приложения.
+
+    Сначала проверяет бандл PyInstaller, затем каталог рядом с бинарником.
+
+    Args:
+        *parts: Компоненты относительного пути (например, ``"config"``, ``"foo.yaml"``).
+
+    Returns:
+        Абсолютный путь к существующему ресурсу или ``None``, если не найден.
     """
     br = bundle_root()
     if br:
@@ -48,10 +67,23 @@ def resource_path(*parts: str) -> Optional[str]:
 
 
 def _asf_candidate_paths() -> Iterable[Path]:
+    """Перечисляет кандидатов на путь к таблице атомных факторов f₀.
+
+    Yields:
+        Уникальные пути к ``data/f0_WaasKirf.dat`` в порядке приоритета.
+    """
     rel = Path("data") / ASF_DAT_FILENAME
     seen: set[Path] = set()
 
     def add(p: Path) -> Optional[Path]:
+        """Добавляет путь в множество уже просмотренных.
+
+        Args:
+            p: Кандидат на путь к файлу.
+
+        Returns:
+            Разрешённый путь, если он ещё не встречался; иначе ``None``.
+        """
         try:
             rp = p.resolve()
         except OSError:
@@ -83,9 +115,15 @@ def _asf_candidate_paths() -> Iterable[Path]:
 
 
 def asf_data_path() -> str:
-    """
-    Абсолютный путь к data/f0_WaasKirf.dat.
-    В frozen-сборке приоритет у _MEIPASS (данные PyInstaller), не у пустого data/ рядом с exe.
+    """Возвращает абсолютный путь к таблице атомных факторов Waas–Kirfel.
+
+    В frozen-сборке приоритет у ``_MEIPASS``, а не у пустого ``data/`` рядом с exe.
+
+    Returns:
+        Путь к файлу ``data/f0_WaasKirf.dat`` размером не менее ``ASF_MIN_BYTES`` байт.
+
+    Raises:
+        FileNotFoundError: Если подходящий файл не найден ни по одному из кандидатов.
     """
     tried: list[str] = []
     for path in _asf_candidate_paths():
@@ -112,7 +150,10 @@ def asf_data_path() -> str:
 
 
 def ensure_workdir() -> None:
-    """В frozen-приложении писать runs/, images/ рядом с исполняемым файлом."""
+    """Устанавливает рабочий каталог рядом с исполняемым файлом (frozen).
+
+    В режиме разработки ничего не делает.
+    """
     if getattr(sys, "frozen", False):
         try:
             os.chdir(application_directory())
@@ -121,6 +162,11 @@ def ensure_workdir() -> None:
 
 
 def bundled_config_dir() -> Optional[Path]:
+    """Возвращает каталог шаблонов конфигурации внутри бандла.
+
+    Returns:
+        Путь к ``config/`` в ``_MEIPASS`` или ``None``, если бандл или каталог отсутствуют.
+    """
     br = bundle_root()
     if not br:
         return None
@@ -129,6 +175,12 @@ def bundled_config_dir() -> Optional[Path]:
 
 
 def _seed_file_if_missing(src: Path, dst: Path) -> None:
+    """Копирует файл из бандла, если целевой файл ещё не существует.
+
+    Args:
+        src: Исходный файл в бандле.
+        dst: Целевой путь рядом с исполняемым файлом.
+    """
     if dst.exists():
         return
     if src.is_file():
@@ -136,11 +188,15 @@ def _seed_file_if_missing(src: Path, dst: Path) -> None:
 
 
 def _ensure_extra_paths_lists_runs(config_dir: Path) -> None:
+    """Гарантирует наличие ``runs`` в ``extra_paths.txt``.
+
+    Args:
+        config_dir: Каталог пользовательской конфигурации.
+    """
     path = config_dir / "extra_paths.txt"
     if not path.is_file():
         path.write_text(
-            "# Дополнительные папки со структурами (по одной на строку).\n"
-            "runs\n",
+            "# Дополнительные папки со структурами (по одной на строку).\nruns\n",
             encoding="utf-8",
         )
         return
@@ -158,9 +214,12 @@ def _ensure_extra_paths_lists_runs(config_dir: Path) -> None:
 
 
 def ensure_runtime_layout() -> Path:
-    """
-    Frozen: cwd = каталог exe, создать runs/ и config/, скопировать шаблоны из бандла.
-    Dev: вернуть config/ репозитория (без копирования).
+    """Подготавливает каталоги ``runs/`` и ``config/`` для frozen-приложения.
+
+    В режиме разработки возвращает ``config/`` репозитория без копирования шаблонов.
+
+    Returns:
+        Путь к каталогу конфигурации, используемому приложением.
     """
     if not getattr(sys, "frozen", False):
         cfg = repository_root() / "config"

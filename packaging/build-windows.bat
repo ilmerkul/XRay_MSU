@@ -7,9 +7,9 @@ set "PYINSTALLER_SPEC_ROOT=%CD%"
 
 where uv >nul 2>&1
 if %ERRORLEVEL% equ 0 (
-  call uv sync --group dev
-  call uv run --group dev pyinstaller "%~dp0xray-msu-gui.spec" --noconfirm
-  call uv run --group dev pyinstaller "%~dp0xray-msu-cli.spec" --noconfirm
+  call uv sync --extra dev
+  call uv run --extra dev pyinstaller "%~dp0xray-msu-gui.spec" --noconfirm
+  call uv run --extra dev pyinstaller "%~dp0xray-msu-cli.spec" --noconfirm
   goto :done
 )
 

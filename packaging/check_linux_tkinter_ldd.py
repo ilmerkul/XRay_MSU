@@ -12,6 +12,11 @@ import sys
 
 
 def main() -> int:
+    """Проверяет, что ``_tkinter`` разрешает libtcl/libtk через ``ldd``.
+
+    Returns:
+        0 при успехе, 1 если import или ldd не прошли или библиотеки не найдены.
+    """
     try:
         import _tkinter
     except ImportError as e:
@@ -75,11 +80,11 @@ def main() -> int:
             file=sys.stderr,
         )
         print(
-            "  2) rm -rf .venv && uv sync --python $(command -v python3) --group dev",
+            "  2) rm -rf .venv && uv sync --python $(command -v python3) --extra dev",
             file=sys.stderr,
         )
         print(
-            "     (или явно: uv sync --python /usr/bin/python3.12 --group dev — см. requires-python в pyproject.toml)",
+            "     (или явно: uv sync --python /usr/bin/python3.12 --extra dev — см. requires-python в pyproject.toml)",
             file=sys.stderr,
         )
         print(

@@ -27,13 +27,13 @@ jobs:
           version: "latest"
 
       - name: Sync deps + dev
-        run: uv sync --group dev
+        run: uv sync --extra dev
 
       - name: Lint
-        run: uv run --group dev ruff check src entry_cli.py entry_gui.py tests/unit
+        run: uv run --extra dev ruff check src tests/unit
 
       - name: pytest
-        run: uv run --group dev pytest tests/unit -q
+        run: uv run --extra dev pytest tests/unit -q
 
   windows:
     needs: [test]
@@ -49,15 +49,15 @@ jobs:
           version: "latest"
 
       - name: Sync deps + dev (pyinstaller)
-        run: uv sync --group dev
+        run: uv sync --extra dev
 
       - name: Build exe
         shell: pwsh
         env:
           PYINSTALLER_SPEC_ROOT: ${{ github.workspace }}
         run: |
-          uv run --group dev pyinstaller packaging/xray-msu-gui.spec --noconfirm
-          uv run --group dev pyinstaller packaging/xray-msu-cli.spec --noconfirm
+          uv run --extra dev pyinstaller packaging/xray-msu-gui.spec --noconfirm
+          uv run --extra dev pyinstaller packaging/xray-msu-cli.spec --noconfirm
 
       - uses: actions/upload-artifact@v4
         with:
@@ -89,18 +89,18 @@ jobs:
           version: "latest"
 
       - name: Sync deps + dev (pyinstaller)
-        run: uv sync --group dev
+        run: uv sync --extra dev
 
       - name: Check _tkinter / Tcl
-        run: uv run --group dev python packaging/check_linux_tkinter_ldd.py
+        run: uv run --extra dev python packaging/check_linux_tkinter_ldd.py
 
       - name: Build binaries
         env:
           PYINSTALLER_SPEC_ROOT: ${{ github.workspace }}
           MPLBACKEND: TkAgg
         run: |
-          uv run --group dev pyinstaller packaging/xray-msu-gui.spec --noconfirm
-          uv run --group dev pyinstaller packaging/xray-msu-cli.spec --noconfirm
+          uv run --extra dev pyinstaller packaging/xray-msu-gui.spec --noconfirm
+          uv run --extra dev pyinstaller packaging/xray-msu-cli.spec --noconfirm
 
       - uses: actions/upload-artifact@v4
         with:

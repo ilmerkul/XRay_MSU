@@ -14,20 +14,20 @@
 ```bash
 git clone <url> XRay_MSU && cd XRay_MSU
 uv sync                    # или: make install
-uv sync --group dev        # PyInstaller для сборки бинарников
+uv sync --extra dev        # PyInstaller для сборки бинарников
 ```
 
 ## Запуск
 
 | Задача | Команда |
 |--------|---------|
-| CLI с конфигом по умолчанию (`config/alpha-Fe_structure.yaml`) | `uv run python cmd/main.py` или `make run` |
-| CLI с **своим** YAML (первый аргумент — путь от корня репозитория) | `uv run python cmd/main.py config/Cu.yaml` |
-| GUI | `uv run python -m src` или `make gui` |
+| CLI с конфигом по умолчанию (`config/alpha-Fe.yaml`) | `uv run python -m src --cli` или `make run` |
+| CLI с **своим** YAML | `uv run python -m src --cli config/Cu.yaml` |
+| GUI (по умолчанию) | `uv run python -m src` или `make gui` |
 
 ### Конфигурация YAML (основные поля)
 
-Параметры читаются через **OmegaConf** (`cmd/main.py`). Имя образца задаётся ключом **`name`** — по нему создаётся каталог **`runs/<name>/`**.
+Параметры читаются через **OmegaConf** (`src/cli.py`). Имя образца задаётся ключом **`name`** — по нему создаётся каталог **`runs/<name>/`**.
 
 | Поле | Смысл |
 |------|--------|
@@ -117,11 +117,10 @@ make doc-pdf
 | Путь | Назначение |
 |------|------------|
 | `src/` | Модели: кристалл, дифрактограмма, симметрия |
-| `src/__main__.py` | Точка входа GUI (`python -m src`) |
-| `cmd/main.py` | CLI с OmegaConf |
+| `src/__main__.py` | Точка входа: `python -m src` (GUI) или `python -m src --cli` |
+| `src/cli.py` | Логика CLI (OmegaConf + расчёт) |
 | `config/` | YAML-конфиги образцов |
 | `packaging/` | PyInstaller spec, скрипты сборки, проверка tkinter на Linux |
-| `entry_gui.py`, `entry_cli.py` | Входы для frozen-сборок |
 
 ## Линтинг
 

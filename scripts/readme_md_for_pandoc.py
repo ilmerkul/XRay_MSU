@@ -6,6 +6,16 @@ import sys
 
 
 def convert(text: str) -> str:
+    """Преобразует \\(…\\) и \\[…\\] в $…$ и $$…$$ для pandoc.
+
+    Блоки кода в тройных backticks не изменяются.
+
+    Args:
+        text: Исходный Markdown-текст.
+
+    Returns:
+        Текст с формулами в синтаксисе pandoc/LaTeX.
+    """
     result = []
     i, n = 0, len(text)
     while i < n:
@@ -35,6 +45,7 @@ def convert(text: str) -> str:
 
 
 def main() -> None:
+    """Читает файл из argv[1] и выводит преобразованный текст в stdout."""
     path = pathlib.Path(sys.argv[1])
     sys.stdout.write(convert(path.read_text(encoding="utf-8")))
 

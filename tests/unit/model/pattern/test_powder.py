@@ -37,6 +37,47 @@ class TestPowderPattern:
         assert x[-1] < 80.0
         assert len(x) > 100
 
+    def test_reflections_txt_columns_match_header(
+        self, bar_pattern: PowderPattern, tmp_path
+    ):
+        out = tmp_path / "refl.txt"
+        bar_pattern.write_reflections_txt(out)
+        lines = out.read_text(encoding="utf-8").splitlines()
+        header = next(line for line in lines if line.startswith("|    n |"))
+        data = next(line for line in lines if line.startswith("|    1 |"))
+        header_cols = [c.strip() for c in header.strip("|").split("|")]
+        data_cols = [c.strip() for c in data.strip("|").split("|")]
+        assert header_cols[:8] == [
+            "n",
+            "twotheta",
+            "hkl",
+            "d",
+            "mult",
+            "fwhm",
+            "l",
+            "p",
+        ]
+        ref = bar_pattern.reflections[-1]
+        assert data_cols[1] == f"{ref['twotheta']:.3f}"
+        assert data_cols[2] == f"{ref['hkl'][0]} {ref['hkl'][1]} {ref['hkl'][2]}"
+        assert data_cols[3] == f"{ref['d']:.3f}"
+
+    def test_reuse_reflections_skips_hkl_enumeration(self, nacl_crystal: Crystal):
+        tth_narrow = np.array([20.0, 40.0, 0.05])
+        tth_wide = np.array([20.0, 55.0, 0.05])
+        base = make_powder_pattern(nacl_crystal, tth_narrow, profile="bar")
+        reflections = base.reflections
+        reused = make_powder_pattern(
+            nacl_crystal,
+            tth_wide,
+            profile="gaussian",
+            reflections=reflections,
+        )
+        assert reused.reflections is reflections
+        x, y = reused.get_pattern_data()
+        assert x[-1] > 54.0
+        assert float(np.max(y)) > 0
+
 
 class TestPowderPatternValidation:
     def test_invalid_multiplicity_mode_raises(self, nacl_crystal: Crystal):

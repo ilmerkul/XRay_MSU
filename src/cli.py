@@ -1,22 +1,9 @@
-#!/usr/bin/env python3
-"""CLI: расчёт порошковой дифрактограммы по YAML (OmegaConf). PyInstaller: entry_cli.py."""
+"""CLI: расчёт порошковой дифрактограммы по YAML (OmegaConf)."""
 
 from __future__ import annotations
 
-import os
-import sys
 from pathlib import Path
 from typing import Any, Optional
-
-if getattr(sys, "frozen", False):
-    sys.path.insert(0, sys._MEIPASS)
-    from src.runtime_layout import ensure_runtime_layout
-
-    ensure_runtime_layout()
-else:
-    _ROOT = Path(__file__).resolve().parent
-    sys.path.insert(0, str(_ROOT))
-    os.chdir(_ROOT)
 
 from omegaconf import OmegaConf
 
@@ -33,15 +20,36 @@ from src.model.pattern.utils import (
 )
 from src.runtime_layout import asf_data_path, resource_path
 
+DEFAULT_CONFIG = "config/alpha-Fe.yaml"
+
 
 def _cfg_float(cfg: Any, key: str) -> Optional[float]:
+    """Извлекает вещественное значение из OmegaConf по ключу.
+
+    Args:
+        cfg: Конфигурация OmegaConf.
+        key: Имя поля.
+
+    Returns:
+        Значение как ``float`` или ``None``, если ключ отсутствует или равен ``None``.
+    """
     if key not in cfg or cfg[key] is None:
         return None
     return float(cfg[key])
 
 
 def _lattice_params(cfg: Any) -> tuple[float, float, float, float, float, float]:
-    """a,b,c,α,β,γ (градусы) с учётом lattice_family из YAML."""
+    """Возвращает a, b, c, α, β, γ (градусы) с учётом ``lattice_family`` из YAML.
+
+    Args:
+        cfg: Конфигурация кристалла из YAML.
+
+    Returns:
+        Шесть параметров решётки в градусах для углов.
+
+    Raises:
+        ValueError: Если для выбранной сингонии не хватает параметров.
+    """
     fam = str(cfg.get("lattice_family") or cfg.get("crystal_system") or "manual")
     fam = fam.strip().lower()
 
@@ -96,7 +104,39 @@ def _lattice_params(cfg: Any) -> tuple[float, float, float, float, float, float]
     return a, b, c, alpha, beta, gamma
 
 
+def discover_config_files() -> list[tuple[str, str]]:
+    """Список доступных YAML-конфигов ``(имя_файла, абсолютный_путь)``."""
+    by_name: dict[str, str] = {}
+    search_dirs: list[Path] = []
+    rp = resource_path("config")
+    if rp:
+        search_dirs.append(Path(rp))
+    cwd_cfg = Path.cwd() / "config"
+    if cwd_cfg.is_dir():
+        search_dirs.append(cwd_cfg.resolve())
+
+    for directory in search_dirs:
+        if not directory.is_dir():
+            continue
+        for pattern in ("*.yaml", "*.yml"):
+            for path in sorted(directory.glob(pattern)):
+                if path.name not in by_name:
+                    by_name[path.name] = str(path.resolve())
+    return sorted(by_name.items(), key=lambda item: item[0].lower())
+
+
 def _resolve_config_path(arg: str) -> str:
+    """Находит путь к YAML-конфигу по аргументу CLI.
+
+    Args:
+        arg: Имя файла или относительный/абсолютный путь.
+
+    Returns:
+        Абсолютный путь к существующему файлу конфигурации.
+
+    Raises:
+        FileNotFoundError: Если конфиг не найден.
+    """
     name = Path(arg).name
     rp = resource_path("config", name)
     if rp:
@@ -110,10 +150,57 @@ def _resolve_config_path(arg: str) -> str:
     raise FileNotFoundError(f"Конфиг не найден: {arg}")
 
 
-def main() -> None:
-    default_cfg = "config/alpha-Fe.yaml"
-    cfg_arg = sys.argv[1] if len(sys.argv) > 1 else default_cfg
-    cfg = OmegaConf.load(_resolve_config_path(cfg_arg))
+def _require_questionary():
+    try:
+        import questionary
+    except ImportError as exc:
+        raise SystemExit(
+            "Для интерактивного CLI установите зависимость:\n  uv sync --extra cli"
+        ) from exc
+    return questionary
+
+
+def _prompt_cli_run(*, local_default: bool) -> tuple[str, bool]:
+    """Интерактивный выбор конфига и режима атомных f через questionary."""
+    questionary = _require_questionary()
+    configs = discover_config_files()
+    if not configs:
+        raise SystemExit(
+            "Не найдены YAML-конфиги в каталоге config/. "
+            "Запустите из корня репозитория или укажите путь: "
+            "python -m src --cli path/to/config.yaml"
+        )
+
+    default_name = Path(DEFAULT_CONFIG).name
+    choices = [questionary.Choice(title=name, value=path) for name, path in configs]
+    default_choice = next(
+        (c for c in choices if c.title == default_name),
+        choices[0],
+    )
+
+    cfg_path = questionary.select(
+        "Выберите конфиг расчёта:",
+        choices=choices,
+        default=default_choice,
+        use_indicator=True,
+    ).ask()
+    if cfg_path is None:
+        raise SystemExit(0)
+
+    use_local = questionary.confirm(
+        "Использовать локальные f (Waas–Kirfel)?\n"
+        "(Нет — xraylib; нужен uv sync --extra xraylib)",
+        default=local_default,
+    ).ask()
+    if use_local is None:
+        raise SystemExit(0)
+
+    return cfg_path, use_local
+
+
+def _execute_calculation(cfg_path: str, *, local: bool) -> None:
+    """Загружает конфиг, считает дифрактограмму и сохраняет в ``runs/``."""
+    cfg = OmegaConf.load(cfg_path)
 
     asf = AtomicScatteringFactor(asf_data_path())
     a, b, c, alpha, beta, gamma = _lattice_params(cfg)
@@ -160,10 +247,24 @@ def main() -> None:
         multiplicity_mode=str(cfg.get("multiplicity_mode", "metric")),
         multiplicity_metric_rtol=float(cfg.get("multiplicity_metric_rtol", 1e-7)),
         multiplicity_metric_atol=float(cfg.get("multiplicity_metric_atol", 1e-12)),
+        local=local,
     )
 
-    Plot(powder=pattern).plot_curve(path=f"runs/{cfg.name}/")
+    out_dir = f"runs/{cfg.name}/"
+    Plot(powder=pattern).plot_curve(path=out_dir)
+    print(f"Готово: результаты в {out_dir}")
 
 
-if __name__ == "__main__":
-    main()
+def run_cli(config_arg: str | None = None, *, local: bool = True) -> None:
+    """Запускает расчёт: интерактивно (questionary) или по пути к YAML.
+
+    Args:
+        config_arg: Путь или имя конфига; если ``None`` — интерактивное меню.
+        local: ``True`` — f из Waas–Kirfel; ``False`` — xraylib.
+    """
+    if config_arg is None:
+        cfg_path, local = _prompt_cli_run(local_default=local)
+    else:
+        cfg_path = _resolve_config_path(config_arg)
+
+    _execute_calculation(cfg_path, local=local)

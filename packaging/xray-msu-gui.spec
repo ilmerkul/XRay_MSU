@@ -113,6 +113,9 @@ datas = [
 hiddenimports = [
     "src",
     "src.__main__",
+    "src.cli",
+    "src.gui",
+    "src.gui.app",
     "src.runtime_layout",
     "src.model.atom.atom",
     "src.model.crystal.crystal",
@@ -141,7 +144,7 @@ hiddenimports += [
 ]
 
 a = Analysis(
-    [str(ROOT / "entry_gui.py")],
+    [str(ROOT / "src" / "__main__.py")],
     pathex=[str(ROOT)],
     binaries=_linux_tcl_tk_binaries(),
     datas=datas,
