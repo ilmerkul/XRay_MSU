@@ -4,7 +4,6 @@ import os
 import shutil
 import subprocess
 import tempfile
-import tkinter as tk
 from tkinter import messagebox
 
 

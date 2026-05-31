@@ -3,17 +3,10 @@
 import tkinter as tk
 from tkinter import ttk
 
-import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-from matplotlib.ticker import MultipleLocator
 from matplotlib.widgets import RectangleSelector
 
-from ..model.pattern.utils import (
-    CAGLIOTI_U_DEFAULT,
-    CAGLIOTI_V_DEFAULT,
-    CAGLIOTI_W_DEFAULT,
-)
 
 
 class WidgetsMixin:

@@ -1,6 +1,5 @@
 """Фрагмент GUI: AtomsMixin."""
 
-import tkinter as tk
 from tkinter import messagebox, ttk
 
 from ..model.atom.atom import AtomicScatteringFactor

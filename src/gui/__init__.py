@@ -12,7 +12,7 @@ def run_gui(*, local: bool = True) -> None:
         local: ``True`` — f из Waas–Kirfel; ``False`` — xraylib (``uv sync --extra xraylib``).
     """
     root = tk.Tk()
-    app = PowderPatternGUI(root, local=local)
+    root._gui_app = PowderPatternGUI(root, local=local)
     root.mainloop()
 
 

@@ -1,7 +1,6 @@
 """Главное окно приложения XRay MSU."""
 
 import locale
-import sys
 
 try:
     locale.setlocale(locale.LC_NUMERIC, "C")

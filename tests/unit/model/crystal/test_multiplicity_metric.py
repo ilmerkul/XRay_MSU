@@ -1,4 +1,3 @@
-import numpy as np
 import pytest
 
 from src.model.crystal.crystal import Crystal
