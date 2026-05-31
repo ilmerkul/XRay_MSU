@@ -26,6 +26,9 @@ jobs:
         with:
           version: "latest"
 
+      - name: Install Tk (tests and GUI build)
+        run: sudo apt-get update && sudo apt-get install -y python3-tk
+
       - name: Sync deps + dev
         run: uv sync --extra dev
 
