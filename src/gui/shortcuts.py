@@ -29,7 +29,11 @@ class ShortcutsMixin:
     def _bind_app_shortcuts(self) -> None:
         """Регистрирует глобальные сочетания клавиш."""
         for seq, _accel, handler in self._shortcut_bindings():
-            self.root.bind_all(seq, handler, add="+")
+            self.root.bind_all(
+                seq,
+                lambda _event, h=handler: h(),
+                add="+",
+            )
 
     def _shortcut_help_rows(self) -> list[tuple[str, str]]:
         """Строки справки: (ключ локализации, подпись клавиш)."""

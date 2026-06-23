@@ -61,6 +61,29 @@ class TestPowderPattern:
         assert data_cols[1] == f"{ref['twotheta']:.3f}"
         assert data_cols[2] == f"{ref['hkl'][0]} {ref['hkl'][1]} {ref['hkl'][2]}"
         assert data_cols[3] == f"{ref['d']:.3f}"
+        assert data_cols[5] == "0.000"
+
+    def test_angles_int_txt_three_columns(self, bar_pattern: PowderPattern, tmp_path):
+        out = tmp_path / "angles-int.txt"
+        bar_pattern.write_angles_int_txt(out)
+        lines = [
+            line
+            for line in out.read_text(encoding="utf-8").splitlines()
+            if line and not line.startswith("#")
+        ]
+        assert lines
+        ref = bar_pattern.reflections[-1]
+        assert lines[0].split("\t") == [
+            f"{ref['twotheta']:.3f}",
+            f"{ref['intensity']:.3f}",
+            "0.000",
+        ]
+
+    def test_bar_profile_fwhm_zero_in_txt(self, bar_pattern: PowderPattern, tmp_path):
+        out = tmp_path / "refl.txt"
+        bar_pattern.write_reflections_txt(out)
+        for ref in bar_pattern.reflections:
+            assert bar_pattern._export_fwhm_value(ref) == 0.0
 
     def test_reuse_reflections_skips_hkl_enumeration(self, nacl_crystal: Crystal):
         tth_narrow = np.array([20.0, 40.0, 0.05])

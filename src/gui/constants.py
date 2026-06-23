@@ -5,13 +5,28 @@ class GuiConstants:
     APP_VERSION = "0.1.5"
 
     SAVE_OUTPUT_KEYS = (
-        "txt",
-        "config",
         "powder_png",
+        "txt",
+        "angles_int",
+        "config",
         "cell_png",
         "G_csv",
         "Gstar_csv",
     )
+    SAVE_OUTPUT_PRIMARY_KEYS = ("powder_png", "txt", "angles_int")
+    SAVE_OUTPUT_DEFAULT_KEYS = frozenset(SAVE_OUTPUT_PRIMARY_KEYS)
+    EXPORT_FILENAMES = {
+        "ru": {
+            "powder_png": "Дифрактограмма.png",
+            "txt": "Рассчит.данные.txt",
+            "angles_int": "углы-инт.txt",
+        },
+        "en": {
+            "powder_png": "Diffractogram.png",
+            "txt": "Calculated data.txt",
+            "angles_int": "angles-int.txt",
+        },
+    }
     PLOT_LEGEND_LOCS = (
         "best",
         "upper right",
@@ -92,9 +107,9 @@ class GuiConstants:
             "a_axis": "a (Å):",
             "b_axis": "b (Å):",
             "c_axis": "c (Å):",
-            "alpha_angle": "α (°):",
-            "beta_angle": "β (°):",
-            "gamma_angle": "γ (°):",
+            "alpha_angle": "α (град):",
+            "beta_angle": "β (град):",
+            "gamma_angle": "γ (град):",
             "atoms": "Атомы",
             "show_biso": "Показать колонку B_iso",
             "add_atom": "Добавить атом",
@@ -118,17 +133,18 @@ class GuiConstants:
             "calc_result_tip_name": "Имя: {name}",
             "calc_result_tip_wl": "λ (Å): {wl}",
             "calc_result_tip_wl2_ratio": "I(λ2)/I(λ1): {ratio:g}",
-            "calc_result_tip_tth": "2θ: {start}–{end} deg, шаг {step}",
+            "calc_result_tip_tth": "2θ: {start}–{end} град, шаг {step}",
             "calc_result_tip_profile": "Профиль: {profile}",
             "calc_result_tip_cell": "Ячейка: a={a:.4f} b={b:.4f} c={c:.4f} Å",
-            "calc_result_tip_angles": "Углы: α={alpha:.1f} β={beta:.1f} γ={gamma:.1f} deg",
+            "calc_result_tip_angles": "Углы: α={alpha:.1f} β={beta:.1f} γ={gamma:.1f} град",
             "calc_result_tip_refl": "Отражений: {n}",
             "calc_result_tip_norm_yes": "Нормировка: да (max={max:.0f})",
             "calc_result_tip_norm_no": "Нормировка: нет",
             "save_to_folder": "Сохранить",
             "save_pick_folder": "Выберите папку для сохранения",
             "save_files_group": "Файлы для сохранения:",
-            "save_file_txt": "Таблица отражений (.txt)",
+            "save_file_txt": "Рассчит.данные (.txt)",
+            "save_file_angles_int": "углы-инт (.txt)",
             "save_file_config": "Конфиг расчёта (.yaml)",
             "save_file_powder_png": "Дифрактограмма (.png)",
             "save_file_cell_png": "Схема ячейки (.png)",
@@ -149,7 +165,8 @@ class GuiConstants:
             "calc_progress_curve": "Свёртка профилей (λ {n}/{total})…",
             "calc_progress_combine": "Суммирование кривых…",
             "calc_progress_done": "Готово",
-            "label_reflection_angles": "Подписи углов 2θ",
+            "label_reflection_hide": "Не показывать углы и hkl",
+            "label_reflection_angles": "Показать углы",
             "label_reflection_angles_hkl": "Показать углы и hkl",
             "hover_angle": "2θ = {angle:.3f}°",
             "print_pattern": "Печать",
@@ -171,8 +188,8 @@ class GuiConstants:
             "orthogonal_cell_title": "Ортогональная ячейка",
             "orthogonal_cell_warning": "Развёртка P/I/F/C/A/B задаётся в дробях по базису при α≈β≈γ≈90° (куб, тетрагон, орторомб и т.п.). Атомы не разворачиваются.",
             "plot_xlabel": "2θ (град)",
-            "plot_ylabel": "Интенсивность, отн.ед.",
-            "plot_ylabel_normalized": "Intensity, normalized",
+            "plot_ylabel": "I, отн. ед.",
+            "plot_ylabel_normalized": "I, отн. ед.",
             "plot_title": "Дифрактограмма",
             "ratio_on_plot": "\nI(λ2)/I(λ1) = {ratio:g} (на графике)",
             "success_title": "Успех",
@@ -223,7 +240,7 @@ class GuiConstants:
             "plot_settings_apply": "Применить",
             "plot_settings_close": "Закрыть",
             "plot_settings_invalid": "Проверьте числовые значения (размеры, прозрачность 0–1, запас Y > 1).",
-            "delete_calc_result": "Удалить",
+            "delete_calc_result": "Удалить дифрактограмму",
             "delete_calc_none": "Выберите расчёт в списке.",
             "delete_calc_confirm": "Удалить расчёт «{name}»?",
             "delete_calc_confirm_multi": "Удалить {n} выбранных расчётов?",
@@ -243,7 +260,8 @@ class GuiConstants:
             "about_text": (
                 "XRay MSU — расчёт порошковой рентгеновской дифрактограммы.\n\n"
                 "Версия 0.1.5\n"
-                "Разработка: проект XRay MSU, МГУ им. М. В. Ломоносова.\n\n"
+                "Разработка кафедры физики твердого тела, физического факультета "
+                "МГУ им. М. В. Ломоносова.\n\n"
                 "Модель: кристалл → отражения → свёртка профилей.\n"
                 "Справка → «Сочетания клавиш» (Ctrl+O, F5, Ctrl+S и др.)."
             ),
@@ -338,7 +356,8 @@ class GuiConstants:
             "save_to_folder": "Save",
             "save_pick_folder": "Choose folder to save",
             "save_files_group": "Files to save:",
-            "save_file_txt": "Reflection table (.txt)",
+            "save_file_txt": "Calculated data (.txt)",
+            "save_file_angles_int": "angles-int (.txt)",
             "save_file_config": "Run config (.yaml)",
             "save_file_powder_png": "Diffractogram (.png)",
             "save_file_cell_png": "Unit cell (.png)",
@@ -360,7 +379,8 @@ class GuiConstants:
             "calc_progress_curve": "Convoluting profiles (λ {n}/{total})…",
             "calc_progress_combine": "Combining curves…",
             "calc_progress_done": "Done",
-            "label_reflection_angles": "Label 2θ angles",
+            "label_reflection_hide": "Hide angles and hkl",
+            "label_reflection_angles": "Show angles",
             "label_reflection_angles_hkl": "Show angles and hkl",
             "hover_angle": "2θ = {angle:.3f}°",
             "print_pattern": "Print pattern",

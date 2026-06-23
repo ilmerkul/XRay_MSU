@@ -87,8 +87,8 @@ class PowderPatternGUI(
         self.space_group_var = tk.StringVar(value="null")
         # P/I/F/C/A/B — развёртка по центровке (дроби ячейки) при Hall пусто
         self.bravais_centering_var = tk.StringVar(value="P")
-        self.language_var = tk.StringVar(value="en")
-        self.theme_var = tk.StringVar(value=self._theme_label("dark"))
+        self.language_var = tk.StringVar(value="ru")
+        self.theme_var = tk.StringVar(value=self._theme_label("light"))
         self.root.title(self.tr("window_title"))
         self.lattice_family_var = tk.StringVar(value=self._lattice_label("manual"))
         self._lattice_trace_ids = []
@@ -139,8 +139,7 @@ class PowderPatternGUI(
         self.config_files = {}
         self.atoms_frame = None
         self.show_biso_var = tk.BooleanVar(value=False)
-        self.label_angles_var = tk.BooleanVar(value=False)
-        self.label_angles_hkl_var = tk.BooleanVar(value=False)
+        self.label_reflection_mode_var = tk.StringVar(value="none")
         self._atom_header_labels = []
         self._section_content = {}
         self._section_buttons = {}

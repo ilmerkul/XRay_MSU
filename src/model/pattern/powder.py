@@ -267,6 +267,31 @@ class PowderPattern:
                 ref["intensity_units"] += " (normalized)"
         return refs
 
+    def _export_fwhm_value(self, ref: dict) -> float:
+        """Возвращает FWHM для экспорта в TXT (для штриха — 0)."""
+        if self.profile == "bar":
+            return 0.0
+        return float(ref.get("fwhm", 0.0))
+
+    def write_angles_int_txt(self, filepath: Union[str, Path], refs=None) -> None:
+        """Записывает углы 2θ, интенсивность и FWHM в текстовый файл.
+
+        Args:
+            filepath: Путь к выходному ``.txt`` файлу.
+            refs: Список отражений; по умолчанию ``self.reflections``.
+        """
+        if refs is None:
+            refs = self.reflections
+        filepath = Path(filepath)
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write("# twotheta  intensity  fwhm\n")
+            for ref in refs[::-1]:
+                fwhm = self._export_fwhm_value(ref)
+                f.write(
+                    f"{ref['twotheta']:.3f}\t{ref['intensity']:.3f}\t{fwhm:.3f}\n"
+                )
+
     def write_reflections_txt(self, filepath: Union[str, Path], refs=None) -> None:
         """Записывает таблицу отражений в текстовый файл с метаданными.
 
@@ -378,7 +403,7 @@ class PowderPattern:
                     f"{hkl[0]} {hkl[1]} {hkl[2]}",
                     f"{ref['d']:.3f}",
                     f"{ref['mult']}",
-                    f"{ref.get('fwhm', 0.0):.3f}",
+                    f"{self._export_fwhm_value(ref):.3f}",
                     f"{ref['l']:.3f}",
                     f"{ref['p']:.3f}",
                     *[

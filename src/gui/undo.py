@@ -34,8 +34,7 @@ class UndoMixin:
         "plot_layout_pad_var",
         "plot_dpi_var",
         "plot_aspect_var",
-        "label_angles_var",
-        "label_angles_hkl_var",
+        "label_reflection_mode_var",
     )
 
     def _init_undo(self) -> None:

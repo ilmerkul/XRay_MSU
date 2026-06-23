@@ -118,8 +118,7 @@ class I18nMixin:
         current_family = self._lattice_family_key()
         current_profile = self._profile_key()
         current_theme = self._theme_key()
-        label_angles = self.label_angles_var.get()
-        label_angles_hkl = self.label_angles_hkl_var.get()
+        label_mode = self.label_reflection_mode_var.get()
         selected_indices = list(getattr(self, "_selected_calc_indices", []))
         self._save_option_state_cache = {
             k: v.get() for k, v in self._save_option_vars.items()
@@ -137,8 +136,7 @@ class I18nMixin:
         self._set_theme_by_key(current_theme)
         self._on_profile_selected()
         self._apply_gui_theme(redraw_plot=False)
-        self.label_angles_var.set(label_angles)
-        self.label_angles_hkl_var.set(label_angles_hkl)
+        self.label_reflection_mode_var.set(label_mode)
         self._selected_calc_indices = selected_indices
         self._refresh_calc_results_list()
         if self._selected_calc_indices:

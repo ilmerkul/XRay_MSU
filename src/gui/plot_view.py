@@ -61,6 +61,8 @@ class PlotViewMixin:
         self, results: list[dict]
     ) -> list[tuple[float, float, str]]:
         """Собирает точки hover hkl/2θ для нескольких наложенных кривых."""
+        if self.label_reflection_mode_var.get() == "none":
+            return []
         peaks: list[tuple[float, float, str]] = []
         multi = len(results) > 1
         for result in results:
@@ -88,8 +90,9 @@ class PlotViewMixin:
         """Применяет режим подписей отражений (углы, hkl или оба)."""
         if self._plot_peak_data is None:
             return
-        show_both = self.label_angles_hkl_var.get()
-        show_angles = self.label_angles_var.get() and not show_both
+        mode = self.label_reflection_mode_var.get()
+        show_both = mode == "both"
+        show_angles = mode == "angles"
         self._clear_peak_label_artists()
         self._hkl_hover_peaks = []
         labeled_angles = set()
@@ -116,26 +119,14 @@ class PlotViewMixin:
                 y_text = min(yp * 1.02, y_top * 0.98) if yp > 0 else y_top * 0.05
                 txt = self.ax.text(xc, y_text, peak["angle_label"], **text_kw)
                 self._peak_label_artists.append(txt)
-            else:
+            elif mode != "none":
                 self._hkl_hover_peaks.append((xc, yp, peak["hover_full"]))
         self.canvas.draw_idle()
 
-    def _on_label_angles_toggled(self):
-        """Обработчик включения подписей углов 2θ (взаимоисключает режим hkl)."""
+    def _on_label_reflection_mode_changed(self):
+        """Обработчик смены режима подписей отражений на графике."""
         if not self._undo_restoring:
             self._push_undo_snapshot()
-        if self.label_angles_var.get():
-            self.label_angles_hkl_var.set(False)
-        self._apply_reflection_label_mode()
-        if not self._undo_restoring:
-            self._commit_form_state()
-
-    def _on_label_angles_hkl_toggled(self):
-        """Обработчик подписей углов и hkl (взаимоисключает режим только углов)."""
-        if not self._undo_restoring:
-            self._push_undo_snapshot()
-        if self.label_angles_hkl_var.get():
-            self.label_angles_var.set(False)
         self._apply_reflection_label_mode()
         if not self._undo_restoring:
             self._commit_form_state()

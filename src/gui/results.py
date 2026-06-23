@@ -515,10 +515,17 @@ class ResultsMixin:
         base_name = result["name"]
         patterns = result["patterns"]
         crystal = patterns[0].crystal
+        lang = self.language_var.get().strip().lower()
+        export_names = self.EXPORT_FILENAMES.get(
+            lang, self.EXPORT_FILENAMES["en"]
+        )
 
         if options.get("txt"):
             for pattern in patterns:
-                pattern.write_reflections_txt(dest / f"{pattern.name}.txt")
+                pattern.write_reflections_txt(dest / export_names["txt"])
+        if options.get("angles_int"):
+            for pattern in patterns:
+                pattern.write_angles_int_txt(dest / export_names["angles_int"])
         if options.get("config"):
             run_cfg = result.get("run_config") or self.collect_run_config()
             with open(dest / f"{base_name}.yaml", "w", encoding="utf-8") as fh:
@@ -540,7 +547,7 @@ class ResultsMixin:
             theme = THEMES[self._theme_key()]
             x = result["x"]
             Plot.save_powder_png(
-                dest / f"{base_name}_powder.png",
+                dest / export_names["powder_png"],
                 x,
                 result["y"],
                 hkl_plot,

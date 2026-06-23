@@ -464,6 +464,7 @@ class WidgetsMixin:
         opts_inner.pack(fill=tk.X)
         save_labels = {
             "txt": "save_file_txt",
+            "angles_int": "save_file_angles_int",
             "config": "save_file_config",
             "powder_png": "save_file_powder_png",
             "cell_png": "save_file_cell_png",
@@ -471,18 +472,35 @@ class WidgetsMixin:
             "Gstar_csv": "save_file_Gstar_csv",
         }
         self._save_option_vars = {}
-        for col, key in enumerate(self.SAVE_OUTPUT_KEYS):
+        other_keys = tuple(
+            k for k in self.SAVE_OUTPUT_KEYS if k not in self.SAVE_OUTPUT_PRIMARY_KEYS
+        )
+        for col, key in enumerate(self.SAVE_OUTPUT_PRIMARY_KEYS):
             cached = self._save_option_state_cache.get(key)
             if cached is None and key == "config":
-                cached = self._save_option_state_cache.get("json", True)
-            var = tk.BooleanVar(value=True if cached is None else cached)
+                cached = self._save_option_state_cache.get("json")
+            default = key in self.SAVE_OUTPUT_DEFAULT_KEYS
+            var = tk.BooleanVar(value=default if cached is None else cached)
             self._save_option_vars[key] = var
             ttk.Checkbutton(
                 opts_inner,
                 text=self.tr(save_labels[key]),
                 variable=var,
                 style="CardInner.TCheckbutton",
-            ).grid(row=col // 2, column=col % 2, sticky="w", padx=6, pady=2)
+            ).grid(row=0, column=col, sticky="w", padx=6, pady=2)
+        for idx, key in enumerate(other_keys):
+            cached = self._save_option_state_cache.get(key)
+            if cached is None and key == "config":
+                cached = self._save_option_state_cache.get("json")
+            default = key in self.SAVE_OUTPUT_DEFAULT_KEYS
+            var = tk.BooleanVar(value=default if cached is None else cached)
+            self._save_option_vars[key] = var
+            ttk.Checkbutton(
+                opts_inner,
+                text=self.tr(save_labels[key]),
+                variable=var,
+                style="CardInner.TCheckbutton",
+            ).grid(row=1 + idx // 2, column=idx % 2, sticky="w", padx=6, pady=2)
 
         results_panel.pack(fill=tk.X, side=tk.BOTTOM, padx=8, pady=(6, 8))
         plot_frame.pack(fill=tk.BOTH, expand=True)

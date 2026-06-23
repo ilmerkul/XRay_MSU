@@ -25,9 +25,19 @@ class MenuBarMixin:
             command=self._add_config_file_dialog,
         )
         file_menu.add_command(
+            label=self.tr("generate_pattern"),
+            command=self.generate_pattern,
+            accelerator="F5",
+        )
+        file_menu.add_command(
             label=self.tr("save_to_folder"),
             command=self._save_selected_result,
             accelerator="Ctrl+S",
+        )
+        file_menu.add_command(
+            label=self.tr("print_pattern"),
+            command=self._print_pattern,
+            accelerator="Ctrl+P",
         )
         file_menu.add_separator()
         file_menu.add_command(
@@ -43,11 +53,6 @@ class MenuBarMixin:
             command=self._undo_last_action,
             accelerator="Ctrl+Z",
             state=tk.DISABLED,
-        )
-        edit_menu.add_command(
-            label=self.tr("generate_pattern"),
-            command=self.generate_pattern,
-            accelerator="F5",
         )
         edit_menu.add_command(
             label=self.tr("delete_calc_result"),
@@ -80,26 +85,29 @@ class MenuBarMixin:
             )
 
         view_menu.add_separator()
-        view_menu.add_checkbutton(
-            label=self.tr("label_reflection_angles"),
-            variable=self.label_angles_var,
-            command=self._on_label_angles_toggled,
+        view_menu.add_radiobutton(
+            label=self.tr("label_reflection_hide"),
+            variable=self.label_reflection_mode_var,
+            value="none",
+            command=self._on_label_reflection_mode_changed,
         )
-        view_menu.add_checkbutton(
+        view_menu.add_radiobutton(
+            label=self.tr("label_reflection_angles"),
+            variable=self.label_reflection_mode_var,
+            value="angles",
+            command=self._on_label_reflection_mode_changed,
+        )
+        view_menu.add_radiobutton(
             label=self.tr("label_reflection_angles_hkl"),
-            variable=self.label_angles_hkl_var,
-            command=self._on_label_angles_hkl_toggled,
+            variable=self.label_reflection_mode_var,
+            value="both",
+            command=self._on_label_reflection_mode_changed,
         )
         view_menu.add_separator()
         view_menu.add_command(
             label=self.tr("menu_plot_settings"),
             command=self._open_plot_settings_dialog,
             accelerator="Ctrl+G",
-        )
-        view_menu.add_command(
-            label=self.tr("print_pattern"),
-            command=self._print_pattern,
-            accelerator="Ctrl+P",
         )
         view_menu.add_command(
             label=self.tr("reset_zoom"),
