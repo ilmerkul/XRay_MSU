@@ -92,6 +92,12 @@ class MenuBarMixin:
             command=self._on_label_reflection_mode_changed,
         )
         view_menu.add_radiobutton(
+            label=self.tr("label_reflection_hkl"),
+            variable=self.label_reflection_mode_var,
+            value="hkl",
+            command=self._on_label_reflection_mode_changed,
+        )
+        view_menu.add_radiobutton(
             label=self.tr("label_reflection_angles"),
             variable=self.label_reflection_mode_var,
             value="angles",

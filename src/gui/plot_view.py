@@ -61,8 +61,6 @@ class PlotViewMixin:
         self, results: list[dict]
     ) -> list[tuple[float, float, str]]:
         """Собирает точки hover hkl/2θ для нескольких наложенных кривых."""
-        if self.label_reflection_mode_var.get() == "none":
-            return []
         peaks: list[tuple[float, float, str]] = []
         multi = len(results) > 1
         for result in results:
@@ -91,8 +89,6 @@ class PlotViewMixin:
         if self._plot_peak_data is None:
             return
         mode = self.label_reflection_mode_var.get()
-        show_both = mode == "both"
-        show_angles = mode == "angles"
         self._clear_peak_label_artists()
         self._hkl_hover_peaks = []
         labeled_angles = set()
@@ -100,8 +96,11 @@ class PlotViewMixin:
         text_kw = self._plot_peak_text_props()
         for peak in self._plot_peak_data:
             xc, yp = peak["xc"], peak["yp"]
-            if show_both:
-                y_text = min(yp * 1.02, y_top * 0.98) if yp > 0 else y_top * 0.05
+            self._hkl_hover_peaks.append((xc, yp, peak["hover_full"]))
+            if mode == "none":
+                continue
+            y_text = min(yp * 1.02, y_top * 0.98) if yp > 0 else y_top * 0.05
+            if mode == "both":
                 txt = self.ax.text(
                     xc,
                     y_text,
@@ -109,18 +108,21 @@ class PlotViewMixin:
                     **text_kw,
                 )
                 self._peak_label_artists.append(txt)
-                self._hkl_hover_peaks.append((xc, yp, peak["hover_full"]))
-            elif show_angles:
-                self._hkl_hover_peaks.append((xc, yp, peak["hover_full"]))
+            elif mode == "hkl":
+                txt = self.ax.text(
+                    xc,
+                    y_text,
+                    rf"$\mathrm{{{peak['hkl']}}}$",
+                    **text_kw,
+                )
+                self._peak_label_artists.append(txt)
+            elif mode == "angles":
                 angle_key = round(xc, 3)
                 if angle_key in labeled_angles:
                     continue
                 labeled_angles.add(angle_key)
-                y_text = min(yp * 1.02, y_top * 0.98) if yp > 0 else y_top * 0.05
                 txt = self.ax.text(xc, y_text, peak["angle_label"], **text_kw)
                 self._peak_label_artists.append(txt)
-            elif mode != "none":
-                self._hkl_hover_peaks.append((xc, yp, peak["hover_full"]))
         self.canvas.draw_idle()
 
     def _on_label_reflection_mode_changed(self):
